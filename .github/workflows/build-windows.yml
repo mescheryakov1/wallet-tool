@@ -19,10 +19,7 @@ jobs:
 
       - name: Download pkcs11 dll
         shell: pwsh
-        run: |
-          Invoke-WebRequest
-            -Uri "http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Windows/x64/rtpkcs11ecp.dll"
-            -OutFile rtpkcs11ecp.dll
+        run: Invoke-WebRequest -Uri "http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Windows/x64/rtpkcs11ecp.dll" -OutFile rtpkcs11ecp.dll
 
       # 3. Ставим PyInstaller
       - name: Install PyInstaller
