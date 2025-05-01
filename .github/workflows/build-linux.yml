@@ -38,10 +38,11 @@ jobs:
           echo "$output"
 
           # проверяем ожидаемую строку
-          if ! echo "$output" | grep -E 'Library Description:.*ECP PKCS #11 library'; then
-            echo "Не удалось найти ожидаемую строку 'Library Description: ... ECP PKCS #11 library'" >&2
+          if ! echo "$output" | grep -F "Library Description: $EXPECTED_DESCRIPTION"; then
+            echo "❌ Не удалось найти ожидаемую строку 'Library Description: $EXPECTED_DESCRIPTION'" >&2
             exit 1
           fi
+          echo "✅ Библиотека загружена"
 
       - name: Upload Linux package
         uses: actions/upload-artifact@v4
