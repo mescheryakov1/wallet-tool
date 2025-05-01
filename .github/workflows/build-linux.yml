@@ -28,7 +28,7 @@ jobs:
             http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Linux/x64/librtpkcs11ecp.so
 
       - name: Install PyInstaller
-        run: pip3 install --no-binary=:all: pyinstaller
+        run: "pip3 install --no-binary=:all: pyinstaller"
 
       - name: Build executable
         run: pyinstaller --onefile main.py
