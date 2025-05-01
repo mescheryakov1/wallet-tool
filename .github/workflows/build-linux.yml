@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install native dependencies
-        run: apt-get update && sudo apt-get install -y libpcsclite1 python3 python3-pip curl unzip
+        run: apt-get update && apt-get install -y libpcsclite1 python3 python3-pip curl unzip
 
       - name: Setup Python
         uses: actions/setup-python@v4
