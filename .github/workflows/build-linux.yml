@@ -1,0 +1,50 @@
+# .github/workflows/build-linux.yml
+name: Build Linux Executable
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Download RT PKCS#11 .so
+        run: |
+          curl -L -o librtpkcs11ecp.so \
+            http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Linux/x64/librtpkcs11ecp.so
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable
+        run: pyinstaller --onefile main.py
+        
+      - name: copy .so
+        run: cp librtpkcs11ecp.so dist/
+
+      - name: Test application
+        run: |
+          # запускаем бинарь и захватываем оба потока
+          output=$(./dist/main 2>&1)
+          echo "App output:"
+          echo "$output"
+
+          # проверяем ожидаемую строку
+          if ! echo "$output" | grep -E 'Library Description:.*ECP PKCS #11 library'; then
+            echo "Не удалось найти ожидаемую строку 'Library Description: ... ECP PKCS #11 library'" >&2
+            exit 1
+          fi
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: dist/**
