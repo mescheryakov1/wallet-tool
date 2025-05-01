@@ -4,9 +4,9 @@ on: [push]
 
 jobs:
   build-linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     container:
-      image: ubuntu:18.04
+      image: ubuntu:20.04
       options: --user root
     env:
       EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
