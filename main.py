@@ -1,6 +1,10 @@
 import ctypes
 import sys
 
+if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Типы из PKCS#11
 CK_VOID_PTR = ctypes.c_void_p
 
