@@ -20,7 +20,10 @@ class CK_INFO(ctypes.Structure):
     ]
 
 def main():
-    lib_path = './librtpkcs11ecp.so'
+    if sys.platform.startswith('win'):
+        lib_path = './rtpkcs11ecp.dll'
+    else:
+        lib_path = './librtpkcs11ecp.so'
     try:
         pkcs11 = ctypes.CDLL(lib_path)
     except OSError as e:
