@@ -38,8 +38,6 @@ jobs:
       - name: Copy dylib next to exe
         run: |
           cp rtpkcs11ecp.dylib dist/
-        run: |
-          cp rtpkcs11ecp.dylib dist/
 
       - name: Test application
         shell: bash
