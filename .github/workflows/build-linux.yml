@@ -36,7 +36,7 @@ jobs:
       - name: Test application
         run: |
           # запускаем бинарь и захватываем оба потока
-          output=$(./dist/main 2>&1)
+          output=$(./dist/main --library-info 2>&1)
           echo "App output:"
           echo "$output"
 

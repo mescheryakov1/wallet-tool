@@ -42,7 +42,7 @@ jobs:
       - name: Test application
         shell: bash
         run: |
-          output=$(./dist/main 2>&1)
+          output=$(./dist/main --library-info 2>&1)
           echo "App output:"; echo "$output"
           if ! echo "$output" | grep -F "Library Description: $EXPECTED_DESCRIPTION"; then
             echo "❌ Expected 'Library Description: $EXPECTED_DESCRIPTION' not found" >&2

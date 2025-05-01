@@ -39,7 +39,7 @@ jobs:
         shell: pwsh
         run: |
           # 1) Запускаем exe и собираем stdout+stderr
-          $lines = & .\dist\main.exe 2>&1
+          $lines = & .\dist\main.exe --library-info 2>&1
           $text  = $lines -join "`n"
 
           # 2) Показываем весь вывод, чтобы было видно, что вернулось
