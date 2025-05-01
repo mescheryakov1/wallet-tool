@@ -37,7 +37,7 @@ jobs:
 
       - name: Test application
         shell: pwsh
-        run: $output = & .\dist\main.exe; Write-Host "App output:`n$output"; if ($output -notmatch 'Library Description:\s*(.+)') { Write-Error "Не удалось найти Library Description в выводе"; exit 1 }; $actual = $Matches[1].Trim(); Write-Host "Found description: '$actual'"; if ($actual -ne $env:EXPECTED_DESCRIPTION) { Write-Error "Library Description не совпадает! Ожидали '$env:EXPECTED_DESCRIPTION', получили '$actual'"; exit 1 }
+        run: '$output = & .\dist\main.exe; Write-Host "App output:`n$output"; if ($output -notmatch 'Library Description:\s*(.+)') { Write-Error "Не удалось найти Library Description в выводе"; exit 1 }; $actual = $Matches[1].Trim(); Write-Host "Found description: '$actual'"; if ($actual -ne $env:EXPECTED_DESCRIPTION) { Write-Error "Library Description не совпадает! Ожидали '$env:EXPECTED_DESCRIPTION', получили '$actual'"; exit 1 }'
 
       # 5. Загружаем получившийся exe как артефакт
       - name: Upload Artifact
