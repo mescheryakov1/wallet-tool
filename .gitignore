@@ -1,0 +1,12 @@
+dist/
+build/
+__pycache__/
+*.spec
+
+# VS Code and Codespaces metadata
+.vscode/
+.devcontainer/.cache
+.devcontainer/.persistedshare
+
+# macOS
+.DS_Store
