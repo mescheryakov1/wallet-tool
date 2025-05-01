@@ -1,0 +1,33 @@
+name: Build Windows Executable
+
+# Запускаем при пуше в любую ветку
+on: [push]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Забираем ваш код
+      - uses: actions/checkout@v4
+
+      # 2. Устанавливаем Python (можете указать вашу версию, например 3.12)
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # 3. Ставим PyInstaller
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      # 4. Собираем один exe-файл
+      - name: Build exe
+        run: pyinstaller --onefile main.py
+
+      # 5. Загружаем получившийся exe как артефакт
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-binary
+          path: dist/main.exe

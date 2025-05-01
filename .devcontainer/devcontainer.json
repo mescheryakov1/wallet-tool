@@ -1,0 +1,5 @@
+{
+    "name": "Python 3.12 (with dev libs)",
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
+    "postCreateCommand": "pip install --user pyinstaller"
+}
