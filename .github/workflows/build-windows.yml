@@ -21,10 +21,6 @@ jobs:
         shell: pwsh
         run: Invoke-WebRequest -Uri "http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Windows/x64/rtpkcs11ecp.dll" -OutFile rtpkcs11ecp.dll
 
-      - name: Copy DLL
-        shell: pwsh
-        run: Copy-Item rtpkcs11ecp.dll dist\
-
       # 3. Ставим PyInstaller
       - name: Install PyInstaller
         run: pip install pyinstaller
@@ -32,6 +28,10 @@ jobs:
       # 4. Собираем один exe-файл
       - name: Build exe
         run: pyinstaller --onefile main.py
+        
+      - name: Copy DLL
+        shell: pwsh
+        run: Copy-Item rtpkcs11ecp.dll dist\
 
       # 5. Загружаем получившийся exe как артефакт
       - name: Upload Artifact
