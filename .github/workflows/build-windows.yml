@@ -6,6 +6,8 @@ on: [push]
 jobs:
   build-windows:
     runs-on: windows-latest
+    env:
+      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
 
     steps:
       # 1. Забираем ваш код
@@ -32,6 +34,10 @@ jobs:
       - name: Copy DLL
         shell: pwsh
         run: Copy-Item rtpkcs11ecp.dll dist\
+
+      - name: Test application
+        shell: pwsh
+        run: $output = & .\dist\main.exe; Write-Host "App output:`n$output"; if ($output -notmatch 'Library Description:\s*(.+)') { Write-Error "Не удалось найти Library Description в выводе"; exit 1 }; $actual = $Matches[1].Trim(); Write-Host "Found description: '$actual'"; if ($actual -ne $env:EXPECTED_DESCRIPTION) { Write-Error "Library Description не совпадает! Ожидали '$env:EXPECTED_DESCRIPTION', получили '$actual'"; exit 1 }
 
       # 5. Загружаем получившийся exe как артефакт
       - name: Upload Artifact
