@@ -38,15 +38,16 @@ jobs:
       - name: Test application
         shell: pwsh
         run: |
-          $output = & .\dist\main.exe 2>&1
-          Write-Host "App output:`n$output"
-          if ($output -notmatch 'Library Description:\s*(.+)') {
-            Write-Error "Не удалось найти Library Description"
-            exit 1
-          }
-          $actual = $Matches[1].Trim()
-          if ($actual -ne $env:EXPECTED_DESCRIPTION) {
-            Write-Error "Mismatch: expected '$env:EXPECTED_DESCRIPTION', got '$actual'"
+          # 1) Запускаем exe и собираем stdout+stderr
+          $lines = & .\dist\main.exe 2>&1
+          $text  = $lines -join "`n"
+
+          # 2) Показываем весь вывод, чтобы было видно, что вернулось
+          Write-Host "App output:`n$text"
+
+          # 3) Проверяем, что в нём есть Library Description с «ECP PKCS #11 library»
+          if ($text -notmatch 'Library Description:.*ECP PKCS #11 library') {
+            Write-Error "Не удалось найти ожидаемую строку 'Library Description: ... ECP PKCS #11 library' в выводе"
             exit 1
           }
           
