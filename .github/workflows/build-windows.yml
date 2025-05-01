@@ -33,5 +33,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-binary
-          path: dist/main.exe
+          name: windows-package
+          path: dist/**
