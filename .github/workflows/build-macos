@@ -1,0 +1,54 @@
+name: Build & Test macOS Executable
+on: [push]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    env:
+      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Download and extract RT PKCS#11 Framework
+        run: |
+          # Скачиваем zip-фреймворк (x64+arm64)
+          curl -L -o rtpkcs11ecp.framework.zip https://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Mac/x64+arm64/rtpkcs11ecp.framework.zip
+          unzip rtpkcs11ecp.framework.zip -d rtpkcs11ecp.framework
+          # Находим поддиректорию Versions и последнюю версию
+          version_dir=$(find rtpkcs11ecp.framework/Versions -type d | sort | tail -n 1)
+          # Копируем бинарник и даём ему расширение .dylib
+          cp "$version_dir/rtpkcs11ecp" rtpkcs11ecp.dylib
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build executable (onefile)
+        run: |
+          rm -rf build/ dist/ main.spec
+          pyinstaller --onefile main.py
+
+      - name: Copy dylib next to exe
+        run: cp rtpkcs11ecp.dylib dist/
+
+      - name: Test application
+        shell: bash
+        run: |
+          output=$(./dist/main 2>&1)
+          echo "App output:"; echo "$output"
+          if ! echo "$output" | grep -F "Library Description: $EXPECTED_DESCRIPTION"; then
+            echo "❌ Expected 'Library Description: $EXPECTED_DESCRIPTION' not found" >&2
+            exit 1
+          fi
+          echo "✅ Library Description matches expected"
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-package
+          path: dist/**
