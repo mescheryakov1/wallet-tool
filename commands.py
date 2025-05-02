@@ -1,4 +1,5 @@
 import ctypes
+import sys
 from pkcs11 import CK_INFO, pkcs11_command
 
 class CK_SLOT_INFO(ctypes.Structure):
@@ -179,14 +180,15 @@ def list_objects(pkcs11, slot_id, pin):
     attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
     attr.ulValueLen = ctypes.sizeof(val)
     
-    
-    template = (CK_ATTRIBUTE * 1)(attr)
-    ptr = ctypes.addressof(template)
+    TemplateArray = CK_ATTRIBUTE * 1
+    template = TemplateArray(attr)
+
+    addr = ctypes.addressof(template)
     # Инициализируем поиск объектов
     rv = pkcs11.C_FindObjectsInit(
         session.value, 
-        ctypes.c_void_p(ptr),
-        len(template)
+        ctypes.c_void_p(addr),
+        1
     )
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
