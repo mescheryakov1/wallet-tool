@@ -176,14 +176,14 @@ def list_objects(pkcs11, slot_id, pin):
     
     attr = CK_ATTRIBUTE()
     attr.type = CKA_CLASS
-    attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
+    attr.pValue = ctypes.cast(ctypes.byref(val), ctypes.c_void_p)
     attr.ulValueLen = ctypes.sizeof(val)
     
     
     template = (CK_ATTRIBUTE * 1)(attr)
-
+    print(len(template))
     # Инициализируем поиск объектов
-    rv = pkcs11.C_FindObjectsInit(session, template, len(template))
+    rv = pkcs11.C_FindObjectsInit(session, template, 1)  # len(template)
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
