@@ -148,12 +148,6 @@ def list_objects(pkcs11, slot_id, pin):
     pkcs11.C_Login.restype = ctypes.c_ulong
     pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
     pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
-    pkcs11.C_FindObjects.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)]
-    pkcs11.C_FindObjects.restype = ctypes.c_ulong
-    pkcs11.C_FindObjectsFinal.argtypes = [ctypes.c_ulong]
-    pkcs11.C_FindObjectsFinal.restype = ctypes.c_ulong
-    pkcs11.C_GetAttributeValue.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
-    pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
 
     # Открываем сессию
     session = ctypes.c_ulong()
@@ -173,22 +167,25 @@ def list_objects(pkcs11, slot_id, pin):
     # Шаблон для поиска объектов типа "сертификат"
     CKA_CLASS = 0x00000000  # Тип объекта
     CKO_CERTIFICATE = 0x00000001  # Объект сертификата
-    val_buf = (ctypes.c_ulong *1)(CKO_CERTIFICATE)
-    
+
+    # 1) создаём переменную и сохраняем её в локальной области видимости
+    val = ctypes.c_ulong(CKO_CERTIFICATE)
+    print(f'[DEBUG] val: {val.value}, type: {type(val)}')
+
+    # 2) формируем структуру CK_ATTRIBUTE, приводя указатель к void*
     attr = CK_ATTRIBUTE()
     attr.type = CKA_CLASS
-    attr.ulValueLen = ctypes.sizeof(val_buf)
-    attr.pValue = ctypes.cast(ctypes.pointer(val_buf), ctypes.c_void_p)
-    
-    TemplateArray = CK_ATTRIBUTE * 1
-    template = TemplateArray(attr)
+    attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
+    attr.ulValueLen = ctypes.sizeof(val)
+    print(f'[DEBUG] CK_ATTRIBUTE: type={attr.type}, pValue={attr.pValue}, ulValueLen={attr.ulValueLen}')
 
-    # Инициализируем поиск объектов
-    rv = pkcs11.C_FindObjectsInit(
-        session.value, 
-        template,
-        1
-    )
+    # 3) создаём массив из одного атрибута
+    template = (CK_ATTRIBUTE * 1)(attr)
+    print(f'[DEBUG] template: {[{"type": t.type, "pValue": t.pValue, "ulValueLen": t.ulValueLen} for t in template]}')
+
+    # 4) инициализируем поиск
+    print(f'[DEBUG] Calling C_FindObjectsInit with session={session.value}, template={template}, count={len(template)}')
+    rv = pkcs11.C_FindObjectsInit(session, template, len(template))
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
