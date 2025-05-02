@@ -173,21 +173,20 @@ def list_objects(pkcs11, slot_id, pin):
     # Шаблон для поиска объектов типа "сертификат"
     CKA_CLASS = 0x00000000  # Тип объекта
     CKO_CERTIFICATE = 0x00000001  # Объект сертификата
-    val = ctypes.c_ulong(CKO_CERTIFICATE)
+    val_buf = (ctypes.c_ulong *1)(CKO_CERTIFICATE)
     
     attr = CK_ATTRIBUTE()
     attr.type = CKA_CLASS
-    attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
-    attr.ulValueLen = ctypes.sizeof(val)
+    attr.pValue = ctypes.cast(val_buf, ctypes.c_void_p)
+    attr.ulValueLen = ctypes.sizeof(val_buf)
     
     TemplateArray = CK_ATTRIBUTE * 1
     template = TemplateArray(attr)
 
-    addr = ctypes.addressof(template)
     # Инициализируем поиск объектов
     rv = pkcs11.C_FindObjectsInit(
         session.value, 
-        ctypes.c_void_p(addr),
+        ctypes.cast(template, ctypes.POINTER(CK_ATTRIBUTE)),
         1
     )
     if rv != 0:
