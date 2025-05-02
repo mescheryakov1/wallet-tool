@@ -1,5 +1,11 @@
 import argparse
+import sys
 from commands import library_info, factory_reset, list_slots, list_wallets
+
+# Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
+if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 def main():
     parser = argparse.ArgumentParser(
