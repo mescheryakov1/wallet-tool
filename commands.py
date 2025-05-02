@@ -145,7 +145,7 @@ def list_objects(pkcs11, slot_id, pin):
     pkcs11.C_OpenSession.restype = ctypes.c_ulong
     pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
     pkcs11.C_Login.restype = ctypes.c_ulong
-    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
+    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.c_void_p, ctypes.c_ulong]
     pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
     pkcs11.C_FindObjects.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)]
     pkcs11.C_FindObjects.restype = ctypes.c_ulong
@@ -181,11 +181,11 @@ def list_objects(pkcs11, slot_id, pin):
     
     
     template = (CK_ATTRIBUTE * 1)(attr)
+    ptr = ctypes.addressof(template)
     # Инициализируем поиск объектов
     rv = pkcs11.C_FindObjectsInit(
         session.value, 
-        ctypes.pointer(template[0]),
-        #ctypes.cast(template, ctypes.POINTER(CK_ATTRIBUTE)), 
+        ctypes.c_void_p(ptr),
         len(template)
     )
     if rv != 0:
