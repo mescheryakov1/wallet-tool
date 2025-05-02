@@ -129,3 +129,108 @@ def list_wallets(pkcs11):
             print(f'    Серийный номер: {serial}')
         else:
             print(f'  Слот {slot_id} не содержит кошелька.')
+
+@pkcs11_command
+def list_objects(pkcs11, slot_id, pin):
+    """Ищет сертификаты в кошельке и выводит их атрибуты."""
+    # Определяем типы аргументов и возвращаемых значений для функций
+    pkcs11.C_OpenSession.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    pkcs11.C_OpenSession.restype = ctypes.c_ulong
+    pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
+    pkcs11.C_Login.restype = ctypes.c_ulong
+    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p), ctypes.c_ulong]
+    pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
+    pkcs11.C_FindObjects.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)]
+    pkcs11.C_FindObjects.restype = ctypes.c_ulong
+    pkcs11.C_FindObjectsFinal.argtypes = [ctypes.c_ulong]
+    pkcs11.C_FindObjectsFinal.restype = ctypes.c_ulong
+    pkcs11.C_GetAttributeValue.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p), ctypes.c_ulong]
+    pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
+
+    # Открываем сессию
+    session = ctypes.c_ulong()
+    rv = pkcs11.C_OpenSession(slot_id, 0x00000004, None, None, ctypes.byref(session))
+    if rv != 0:
+        print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+        return
+
+    # Выполняем логин
+    if pin:
+        rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+        if rv != 0:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            pkcs11.C_CloseSession(session)
+            return
+
+    # Шаблон для поиска объектов типа "сертификат"
+    CKA_CLASS = 0x00000000  # Тип объекта
+    CKO_CERTIFICATE = 0x00000001  # Объект сертификата
+    template = (ctypes.c_void_p * 2)()
+    template[0] = CKA_CLASS
+    template[1] = CKO_CERTIFICATE
+
+    # Инициализируем поиск объектов
+    rv = pkcs11.C_FindObjectsInit(session, template, 2)
+    if rv != 0:
+        print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
+        pkcs11.C_CloseSession(session)
+        return
+
+    # Ищем объекты
+    print('Список сертификатов в кошельке:')
+    obj = ctypes.c_ulong()
+    count = ctypes.c_ulong()
+    while True:
+        rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
+        if rv != 0 or count.value == 0:
+            break
+
+        # Получаем атрибуты объекта
+        attributes = [
+            {"type": 0x00000082, "name": "CKA_LABEL"},  # Метка
+            {"type": 0x00000083, "name": "CKA_ID"},     # Идентификатор
+            {"type": 0x00000086, "name": "CKA_VALUE"},  # Значение сертификата
+        ]
+
+        print(f'  Сертификат ID: {obj.value}')
+        for attr in attributes:
+            attr_template = (ctypes.c_void_p * 2)()
+            attr_template[0] = attr["type"]
+            attr_template[1] = None  # Сначала получаем размер
+
+            rv = pkcs11.C_GetAttributeValue(session, obj, attr_template, 1)
+            if rv != 0:
+                print(f'    Ошибка получения {attr["name"]}: 0x{rv:08X}')
+                continue
+
+            # Если размер атрибута больше 0, получаем его значение
+            if attr_template[1]:
+                value = (ctypes.c_ubyte * attr_template[1])()
+                attr_template[1] = ctypes.cast(value, ctypes.c_void_p)
+                rv = pkcs11.C_GetAttributeValue(session, obj, attr_template, 1)
+                if rv == 0:
+                    if attr["name"] == "CKA_VALUE":
+                        # Ограничиваем вывод первых 64 символов
+                        value_str = bytes(value).decode('utf-8', errors='ignore').replace('\x00', ' ')
+                        truncated_value = value_str[:64]
+                        skipped_chars = len(value_str) - 64 if len(value_str) > 64 else 0
+                        print(f'    {attr["name"]}: {truncated_value} (пропущено {skipped_chars} символов)')
+                    else:
+                        # Проверяем, содержит ли значение непечатные символы
+                        try:
+                            decoded_value = bytes(value).decode('utf-8')
+                            if all(32 <= ord(c) <= 126 for c in decoded_value):
+                                print(f'    {attr["name"]} (TEXT): {decoded_value}')
+                            else:
+                                raise ValueError
+                        except ValueError:
+                            hex_value = " ".join(f"{b:02X}" for b in value)
+                            print(f'    {attr["name"]} (HEX): {hex_value}')
+                else:
+                    print(f'    Ошибка получения значения {attr["name"]}: 0x{rv:08X}')
+
+    # Завершаем поиск объектов
+    pkcs11.C_FindObjectsFinal(session)
+
+    # Закрываем сессию
+    pkcs11.C_CloseSession(session)

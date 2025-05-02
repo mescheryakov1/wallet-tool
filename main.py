@@ -1,6 +1,6 @@
 import argparse
 import sys
-from commands import library_info, factory_reset, list_slots, list_wallets
+from commands import library_info, factory_reset, list_slots, list_wallets, list_objects
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
 if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
@@ -19,12 +19,14 @@ def main():
                         help='Показать список кошельков (токенов)')
     parser.add_argument('--factory-reset', action='store_true',
                         help='Выполнить фабричный сброс кошелька')
+    parser.add_argument('--label', type=str, default='',
+                        help='Метка для фабричного сброса (по умолчанию пустая строка)')
+    parser.add_argument('--list-objects', action='store_true',
+                        help='Показать список объектов в кошельке')
     parser.add_argument('--slot-id', type=int, default=0,
-                        help='Идентификатор слота для фабричного сброса (по умолчанию 0)')
-    parser.add_argument('--pin', type=str, default='12345678',
-                        help='PIN-код для фабричного сброса (по умолчанию "12345678")')
-    parser.add_argument('--label', type=str, default='NewToken',
-                        help='Метка токена для фабричного сброса (по умолчанию "NewToken")')
+                        help='Идентификатор слота для выполнения команды (по умолчанию 0)')
+    parser.add_argument('--pin', type=str, default=None,
+                        help='PIN-код для выполнения команды (если требуется)')
 
     args = parser.parse_args()
 
@@ -36,6 +38,8 @@ def main():
         list_wallets()
     elif args.factory_reset:
         factory_reset(args.slot_id, args.pin, args.label)
+    elif args.list_objects:
+        list_objects(args.slot_id, args.pin)
     else:
         parser.print_help()
 
