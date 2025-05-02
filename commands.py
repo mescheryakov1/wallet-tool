@@ -172,8 +172,9 @@ def list_objects(pkcs11, slot_id, pin):
     # Шаблон для поиска объектов типа "сертификат"
     CKA_CLASS = 0x00000000  # Тип объекта
     CKO_CERTIFICATE = 0x00000001  # Объект сертификата
+    class_value = ctypes.c_ulong(CKO_CERTIFICATE)
     template = (CK_ATTRIBUTE * 1)(
-        CK_ATTRIBUTE(type=CKA_CLASS, pValue=ctypes.byref(ctypes.c_ulong(CKO_CERTIFICATE)), ulValueLen=ctypes.sizeof(ctypes.c_ulong))
+        CK_ATTRIBUTE(type=CKA_CLASS, pValue=ctypes.cast(ctypes.pointer(class_value), ctypes.c_void_p), ulValueLen=ctypes.sizeof(class_value))
     )
 
     # Инициализируем поиск объектов
