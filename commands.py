@@ -149,9 +149,12 @@ def list_objects(pkcs11, slot_id, pin):
     pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
     pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
 
+    CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
+    CKF_RW_SESSION     = 1 << 2  # 0x00000004
+
     # Открываем сессию
     session = ctypes.c_ulong()
-    rv = pkcs11.C_OpenSession(slot_id, 0x00000004, None, None, ctypes.byref(session))
+    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
     if rv != 0:
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
