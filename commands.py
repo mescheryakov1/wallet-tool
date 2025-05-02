@@ -32,6 +32,13 @@ class CK_TOKEN_INFO(ctypes.Structure):
         ('utcTime', ctypes.c_char * 16),
     ]
 
+class CK_ATTRIBUTE(ctypes.Structure):
+    _fields_ = [
+        ('type', ctypes.c_ulong),
+        ('pValue', ctypes.c_void_p),
+        ('ulValueLen', ctypes.c_ulong),
+    ]
+
 @pkcs11_command
 def library_info(pkcs11):
     pkcs11.C_GetInfo.argtypes = [ctypes.POINTER(CK_INFO)]
@@ -138,13 +145,13 @@ def list_objects(pkcs11, slot_id, pin):
     pkcs11.C_OpenSession.restype = ctypes.c_ulong
     pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
     pkcs11.C_Login.restype = ctypes.c_ulong
-    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p), ctypes.c_ulong]
+    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
     pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
     pkcs11.C_FindObjects.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong), ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong)]
     pkcs11.C_FindObjects.restype = ctypes.c_ulong
     pkcs11.C_FindObjectsFinal.argtypes = [ctypes.c_ulong]
     pkcs11.C_FindObjectsFinal.restype = ctypes.c_ulong
-    pkcs11.C_GetAttributeValue.argtypes = [ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p), ctypes.c_ulong]
+    pkcs11.C_GetAttributeValue.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
     pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
 
     # Открываем сессию
@@ -165,12 +172,12 @@ def list_objects(pkcs11, slot_id, pin):
     # Шаблон для поиска объектов типа "сертификат"
     CKA_CLASS = 0x00000000  # Тип объекта
     CKO_CERTIFICATE = 0x00000001  # Объект сертификата
-    template = (ctypes.c_void_p * 2)()
-    template[0] = CKA_CLASS
-    template[1] = CKO_CERTIFICATE
+    template = (CK_ATTRIBUTE * 1)(
+        CK_ATTRIBUTE(type=CKA_CLASS, pValue=ctypes.byref(ctypes.c_ulong(CKO_CERTIFICATE)), ulValueLen=ctypes.sizeof(ctypes.c_ulong))
+    )
 
     # Инициализируем поиск объектов
-    rv = pkcs11.C_FindObjectsInit(session, template, 2)
+    rv = pkcs11.C_FindObjectsInit(session, template, len(template))
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
@@ -194,20 +201,19 @@ def list_objects(pkcs11, slot_id, pin):
 
         print(f'  Сертификат ID: {obj.value}')
         for attr in attributes:
-            attr_template = (ctypes.c_void_p * 2)()
-            attr_template[0] = attr["type"]
-            attr_template[1] = None  # Сначала получаем размер
+            attr_template = CK_ATTRIBUTE(type=attr["type"], pValue=None, ulValueLen=0)
 
-            rv = pkcs11.C_GetAttributeValue(session, obj, attr_template, 1)
+            # Сначала получаем размер атрибута
+            rv = pkcs11.C_GetAttributeValue(session, obj, ctypes.byref(attr_template), 1)
             if rv != 0:
                 print(f'    Ошибка получения {attr["name"]}: 0x{rv:08X}')
                 continue
 
             # Если размер атрибута больше 0, получаем его значение
-            if attr_template[1]:
-                value = (ctypes.c_ubyte * attr_template[1])()
-                attr_template[1] = ctypes.cast(value, ctypes.c_void_p)
-                rv = pkcs11.C_GetAttributeValue(session, obj, attr_template, 1)
+            if attr_template.ulValueLen > 0:
+                value = (ctypes.c_ubyte * attr_template.ulValueLen)()
+                attr_template.pValue = ctypes.cast(value, ctypes.c_void_p)
+                rv = pkcs11.C_GetAttributeValue(session, obj, ctypes.byref(attr_template), 1)
                 if rv == 0:
                     if attr["name"] == "CKA_VALUE":
                         # Ограничиваем вывод первых 64 символов
