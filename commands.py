@@ -182,7 +182,7 @@ def list_objects(pkcs11, slot_id, pin):
     
     template = (CK_ATTRIBUTE * 1)(attr)
     # Инициализируем поиск объектов
-    rv = pkcs11.C_FindObjectsInit(session.value, template, len(template))
+    rv = pkcs11.C_FindObjectsInit(session.value, ctypes.byref(template), len(template))
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
