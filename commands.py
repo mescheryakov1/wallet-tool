@@ -138,7 +138,7 @@ def list_objects(pkcs11, slot_id, pin):
         return
 
     # Ищем объекты
-    print('Список сертификатов в кошельке:')
+    print('Список ключей в кошельке:')
     obj = ctypes.c_ulong()
     count = ctypes.c_ulong()
     while True:
@@ -153,7 +153,7 @@ def list_objects(pkcs11, slot_id, pin):
             {"type": 0x00000086, "name": "CKA_VALUE"},  # ключа
         ]
 
-        print(f'  Сертификат ID: {obj.value}')
+        print(f'  ID ключа: {obj.value}')
         for attr in attributes:
             attr_template = CK_ATTRIBUTE(type=attr["type"], pValue=None, ulValueLen=0)
 
