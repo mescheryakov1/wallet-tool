@@ -176,7 +176,7 @@ def list_objects(pkcs11, slot_id, pin):
     
     attr = CK_ATTRIBUTE()
     attr.type = CKA_CLASS
-    attr.pValue = ctypes.cast(ctypes.byref(val), ctypes.c_void_p)
+    attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
     attr.ulValueLen = ctypes.sizeof(val)
     
     
@@ -184,7 +184,8 @@ def list_objects(pkcs11, slot_id, pin):
     # Инициализируем поиск объектов
     rv = pkcs11.C_FindObjectsInit(
         session.value, 
-        ctypes.cast(template, ctypes.POINTER(CK_ATTRIBUTE)), 
+        ctypes.pointer(template[0]),
+        #ctypes.cast(template, ctypes.POINTER(CK_ATTRIBUTE)), 
         len(template)
     )
     if rv != 0:
