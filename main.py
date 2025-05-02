@@ -14,11 +14,11 @@ def main():
     parser.add_argument('--library-info', action='store_true',
                         help='Показать информацию о библиотеке (C_GetInfo)')
     parser.add_argument('--list-slots', action='store_true',
-                        help='Показать список доступных слотов (заглушка)')
+                        help='Показать список доступных слотов')
     parser.add_argument('--list-wallets', action='store_true',
-                        help='Показать список кошельков (заглушка)')
+                        help='Показать список кошельков (токенов)')
     parser.add_argument('--factory-reset', action='store_true',
-                        help='Выполнить фабричный сброс токена (C_EX_InitToken)')
+                        help='Выполнить фабричный сброс кошелька')
     parser.add_argument('--slot-id', type=int, default=0,
                         help='Идентификатор слота для фабричного сброса (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default='12345678',
