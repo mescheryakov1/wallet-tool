@@ -1,5 +1,4 @@
 import ctypes
-from pkcs11 import CK_INFO
 
 # Константы
 CKA_CLASS = 0x00000000  # Тип объекта
@@ -8,6 +7,20 @@ CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
 
 # Структуры PKCS#11
+
+CK_VOID_PTR = ctypes.c_void_p
+
+class CK_VERSION(ctypes.Structure):
+    _fields_ = [('major', ctypes.c_ubyte), ('minor', ctypes.c_ubyte)]
+
+class CK_INFO(ctypes.Structure):
+    _fields_ = [
+        ('cryptokiVersion', CK_VERSION),
+        ('manufacturerID', ctypes.c_char * 32),
+        ('flags', ctypes.c_ulong),
+        ('libraryDescription', ctypes.c_char * 32),
+        ('libraryVersion', CK_VERSION),
+    ]
 
 class CK_SLOT_INFO(ctypes.Structure):
     _fields_ = [

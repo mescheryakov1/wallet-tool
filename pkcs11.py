@@ -1,19 +1,6 @@
 import ctypes
 import sys
-
-CK_VOID_PTR = ctypes.c_void_p
-
-class CK_VERSION(ctypes.Structure):
-    _fields_ = [('major', ctypes.c_ubyte), ('minor', ctypes.c_ubyte)]
-
-class CK_INFO(ctypes.Structure):
-    _fields_ = [
-        ('cryptokiVersion', CK_VERSION),
-        ('manufacturerID', ctypes.c_char * 32),
-        ('flags', ctypes.c_ulong),
-        ('libraryDescription', ctypes.c_char * 32),
-        ('libraryVersion', CK_VERSION),
-    ]
+from pkcs11_structs import CK_VOID_PTR
 
 def load_pkcs11_lib():
     """Загружает библиотеку PKCS#11 в зависимости от платформы."""

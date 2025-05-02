@@ -1,7 +1,7 @@
 import ctypes
 import sys
-from pkcs11 import CK_INFO, pkcs11_command
-from pkcs11_structs import CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE, CKA_CLASS, CKO_CERTIFICATE, CKF_SERIAL_SESSION, CKF_RW_SESSION
+from pkcs11 import pkcs11_command
+from pkcs11_structs import CK_INFO, CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE, CKA_CLASS, CKO_CERTIFICATE, CKF_SERIAL_SESSION, CKF_RW_SESSION
 from pkcs11_definitions import define_pkcs11_functions
 
 @pkcs11_command
