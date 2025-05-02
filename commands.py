@@ -1,7 +1,7 @@
 import ctypes
 import sys
 from pkcs11 import pkcs11_command
-from pkcs11_structs import CK_INFO, CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE, CKA_CLASS, CKO_CERTIFICATE, CKF_SERIAL_SESSION, CKF_RW_SESSION
+from pkcs11_structs import CK_INFO, CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE, CKA_CLASS, CKO_PUBLIC_KEY, CKF_SERIAL_SESSION, CKF_RW_SESSION
 from pkcs11_definitions import define_pkcs11_functions
 
 @pkcs11_command
@@ -98,7 +98,7 @@ def list_wallets(pkcs11):
 
 @pkcs11_command
 def list_objects(pkcs11, slot_id, pin):
-    """Ищет сертификаты в кошельке и выводит их атрибуты."""
+    """Ищет ключи в кошельке и выводит их атрибуты."""
     define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     # Открываем сессию
@@ -117,7 +117,7 @@ def list_objects(pkcs11, slot_id, pin):
             return
 
     # 1) создаём переменную и сохраняем её в локальной области видимости
-    val = ctypes.c_ulong(CKO_CERTIFICATE)
+    val = ctypes.c_ulong(CKO_PUBLIC_KEY)
 
     # 2) формируем структуру CK_ATTRIBUTE, приводя указатель к void*
     attr = CK_ATTRIBUTE()
@@ -150,7 +150,7 @@ def list_objects(pkcs11, slot_id, pin):
         attributes = [
             {"type": 0x00000082, "name": "CKA_LABEL"},  # Метка
             {"type": 0x00000083, "name": "CKA_ID"},     # Идентификатор
-            {"type": 0x00000086, "name": "CKA_VALUE"},  # Значение сертификата
+            {"type": 0x00000086, "name": "CKA_VALUE"},  # ключа
         ]
 
         print(f'  Сертификат ID: {obj.value}')

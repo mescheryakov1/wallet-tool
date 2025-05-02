@@ -3,6 +3,13 @@ import ctypes
 # Константы
 CKA_CLASS = 0x00000000  # Тип объекта
 CKO_CERTIFICATE = 0x00000001  # Объект сертификата
+CKO_PRIVATE_KEY = 0x00000002  # Объект закрытого ключа
+CKO_PUBLIC_KEY = 0x00000003  # Объект открытого ключа
+CKO_SECRET_KEY = 0x00000004  # Объект секретного ключа
+CKO_DATA = 0x00000005  # Объект данных
+CKO_DOMAIN_PARAMETERS = 0x00000006  # Объект параметров домена
+CKO_HW_FEATURE = 0x00000007  # Объект аппаратного обеспечения
+
 CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
 
