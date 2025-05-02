@@ -1,49 +1,12 @@
 import ctypes
 import sys
 from pkcs11 import CK_INFO, pkcs11_command
-
-class CK_SLOT_INFO(ctypes.Structure):
-    _fields_ = [
-        ('slotDescription', ctypes.c_char * 64),
-        ('manufacturerID', ctypes.c_char * 32),
-        ('flags', ctypes.c_ulong),
-        ('hardwareVersion', CK_INFO),
-        ('firmwareVersion', CK_INFO),
-    ]
-
-class CK_TOKEN_INFO(ctypes.Structure):
-    _fields_ = [
-        ('label', ctypes.c_char * 32),
-        ('manufacturerID', ctypes.c_char * 32),
-        ('model', ctypes.c_char * 16),
-        ('serialNumber', ctypes.c_char * 16),
-        ('flags', ctypes.c_ulong),
-        ('ulMaxSessionCount', ctypes.c_ulong),
-        ('ulSessionCount', ctypes.c_ulong),
-        ('ulMaxRwSessionCount', ctypes.c_ulong),
-        ('ulRwSessionCount', ctypes.c_ulong),
-        ('ulMaxPinLen', ctypes.c_ulong),
-        ('ulMinPinLen', ctypes.c_ulong),
-        ('ulTotalPublicMemory', ctypes.c_ulong),
-        ('ulFreePublicMemory', ctypes.c_ulong),
-        ('ulTotalPrivateMemory', ctypes.c_ulong),
-        ('ulFreePrivateMemory', ctypes.c_ulong),
-        ('hardwareVersion', CK_INFO),
-        ('firmwareVersion', CK_INFO),
-        ('utcTime', ctypes.c_char * 16),
-    ]
-
-class CK_ATTRIBUTE(ctypes.Structure):
-    _fields_ = [
-        ('type', ctypes.c_ulong),
-        ('pValue', ctypes.c_void_p),
-        ('ulValueLen', ctypes.c_ulong),
-    ]
+from pkcs11_structs import CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE, CKA_CLASS, CKO_CERTIFICATE, CKF_SERIAL_SESSION, CKF_RW_SESSION
+from pkcs11_definitions import define_pkcs11_functions
 
 @pkcs11_command
 def library_info(pkcs11):
-    pkcs11.C_GetInfo.argtypes = [ctypes.POINTER(CK_INFO)]
-    pkcs11.C_GetInfo.restype = ctypes.c_ulong
+    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     info = CK_INFO()
     rv = pkcs11.C_GetInfo(ctypes.byref(info))
@@ -52,8 +15,8 @@ def library_info(pkcs11):
     else:
         version = f'{info.cryptokiVersion.major}.{info.cryptokiVersion.minor}'
         libver = f'{info.libraryVersion.major}.{info.libraryVersion.minor}'
-        manuf = info.manufacturerID.decode('utf-8', errors='ignore').strip()
-        desc = info.libraryDescription.decode('utf-8', errors='ignore').strip()
+        manuf = info.manufacturerID.decode('utf-8', errors='ignore')
+        desc = info.libraryDescription.decode('utf-8', errors='ignore')
         print('Информация о PKCS#11 библиотеке:')
         print(f'  Cryptoki Version:    {version}')
         print(f'  Library Description: {desc}')
@@ -62,8 +25,7 @@ def library_info(pkcs11):
 
 @pkcs11_command
 def factory_reset(pkcs11, slot_id, pin, label):
-    pkcs11.C_EX_InitToken.argtypes = [ctypes.c_ulong, ctypes.c_char_p, ctypes.c_char_p]
-    pkcs11.C_EX_InitToken.restype = ctypes.c_ulong
+    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     slot_id = int(slot_id)
     pin = pin.encode('utf-8')
@@ -78,8 +40,7 @@ def factory_reset(pkcs11, slot_id, pin, label):
 @pkcs11_command
 def list_slots(pkcs11):
     """Выводит список доступных слотов."""
-    pkcs11.C_GetSlotList.argtypes = [ctypes.c_bool, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong)]
-    pkcs11.C_GetSlotList.restype = ctypes.c_ulong
+    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     # Получаем количество слотов
     count = ctypes.c_ulong()
@@ -102,10 +63,7 @@ def list_slots(pkcs11):
 @pkcs11_command
 def list_wallets(pkcs11):
     """Выводит список доступных кошельков (токенов)."""
-    pkcs11.C_GetSlotList.argtypes = [ctypes.c_bool, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong)]
-    pkcs11.C_GetSlotList.restype = ctypes.c_ulong
-    pkcs11.C_GetTokenInfo.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_TOKEN_INFO)]
-    pkcs11.C_GetTokenInfo.restype = ctypes.c_ulong
+    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     # Получаем количество слотов
     count = ctypes.c_ulong()
@@ -141,16 +99,7 @@ def list_wallets(pkcs11):
 @pkcs11_command
 def list_objects(pkcs11, slot_id, pin):
     """Ищет сертификаты в кошельке и выводит их атрибуты."""
-    # Определяем типы аргументов и возвращаемых значений для функций
-    pkcs11.C_OpenSession.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-    pkcs11.C_OpenSession.restype = ctypes.c_ulong
-    pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
-    pkcs11.C_Login.restype = ctypes.c_ulong
-    pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]
-    pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
-
-    CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
-    CKF_RW_SESSION     = 1 << 2  # 0x00000004
+    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     # Открываем сессию
     session = ctypes.c_ulong()
@@ -167,27 +116,21 @@ def list_objects(pkcs11, slot_id, pin):
             pkcs11.C_CloseSession(session)
             return
 
-    # Шаблон для поиска объектов типа "сертификат"
-    CKA_CLASS = 0x00000000  # Тип объекта
-    CKO_CERTIFICATE = 0x00000001  # Объект сертификата
-
     # 1) создаём переменную и сохраняем её в локальной области видимости
     val = ctypes.c_ulong(CKO_CERTIFICATE)
-    print(f'[DEBUG] val: {val.value}, type: {type(val)}')
 
     # 2) формируем структуру CK_ATTRIBUTE, приводя указатель к void*
     attr = CK_ATTRIBUTE()
     attr.type = CKA_CLASS
     attr.pValue = ctypes.cast(ctypes.pointer(val), ctypes.c_void_p)
     attr.ulValueLen = ctypes.sizeof(val)
-    print(f'[DEBUG] CK_ATTRIBUTE: type={attr.type}, pValue={attr.pValue}, ulValueLen={attr.ulValueLen}')
+    
 
     # 3) создаём массив из одного атрибута
     template = (CK_ATTRIBUTE * 1)(attr)
-    print(f'[DEBUG] template: {[{"type": t.type, "pValue": t.pValue, "ulValueLen": t.ulValueLen} for t in template]}')
 
     # 4) инициализируем поиск
-    print(f'[DEBUG] Calling C_FindObjectsInit with session={session.value}, template={template}, count={len(template)}')
+ 
     rv = pkcs11.C_FindObjectsInit(session.value, template, len(template))
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
