@@ -188,7 +188,7 @@ def list_objects(pkcs11, slot_id, pin):
 
     # 4) инициализируем поиск
     print(f'[DEBUG] Calling C_FindObjectsInit with session={session.value}, template={template}, count={len(template)}')
-    rv = pkcs11.C_FindObjectsInit(session, template, len(template))
+    rv = pkcs11.C_FindObjectsInit(session.value, template, len(template))
     if rv != 0:
         print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
