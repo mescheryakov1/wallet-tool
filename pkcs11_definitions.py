@@ -15,7 +15,7 @@ def define_pkcs11_functions(pkcs11):
     pkcs11.C_GetSlotList.argtypes = [ctypes.c_bool, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong)]
     pkcs11.C_GetSlotList.restype = ctypes.c_ulong
 
-    # C_GetSlotInfo
+    # C_GetTokenInfo
     pkcs11.C_GetTokenInfo.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_TOKEN_INFO)]
     pkcs11.C_GetTokenInfo.restype = ctypes.c_ulong
 
@@ -40,5 +40,10 @@ def define_pkcs11_functions(pkcs11):
     pkcs11.C_FindObjectsFinal.restype = ctypes.c_ulong
 
     # C_GetAttributeValue
-    pkcs11.C_GetAttributeValue.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]  # CK_ATTRIBUTE
+    pkcs11.C_GetAttributeValue.argtypes = [
+        ctypes.c_ulong,  # CK_SESSION_HANDLE
+        ctypes.c_ulong,  # CK_OBJECT_HANDLE
+        ctypes.POINTER(CK_ATTRIBUTE),  # CK_ATTRIBUTE_PTR
+        ctypes.c_ulong,  # ulCount
+    ]
     pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
