@@ -28,10 +28,14 @@ def factory_reset(pkcs11, slot_id, pin, label):
     define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
 
     slot_id = int(slot_id)
-    pin = pin.encode('utf-8')
+    pin_bytes = pin.encode('utf-8') if pin else None
     label = label.encode('utf-8')
 
-    rv = pkcs11.C_EX_InitToken(slot_id, pin, label)
+    if pin_bytes is None:
+        print('Необходимо указать PIN-код для фабричного сброса.', file=sys.stderr)
+        return
+
+    rv = pkcs11.C_EX_InitToken(slot_id, pin_bytes, label)
     if rv != 0:
         print(f'C_EX_InitToken вернула ошибку: 0x{rv:08X}')
     else:
