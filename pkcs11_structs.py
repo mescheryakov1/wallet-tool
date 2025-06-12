@@ -34,8 +34,8 @@ class CK_SLOT_INFO(ctypes.Structure):
         ('slotDescription', ctypes.c_char * 64),
         ('manufacturerID', ctypes.c_char * 32),
         ('flags', ctypes.c_ulong),
-        ('hardwareVersion', CK_INFO),
-        ('firmwareVersion', CK_INFO),
+        ('hardwareVersion', CK_VERSION),
+        ('firmwareVersion', CK_VERSION),
     ]
 
 class CK_TOKEN_INFO(ctypes.Structure):
@@ -55,8 +55,8 @@ class CK_TOKEN_INFO(ctypes.Structure):
         ('ulFreePublicMemory', ctypes.c_ulong),
         ('ulTotalPrivateMemory', ctypes.c_ulong),
         ('ulFreePrivateMemory', ctypes.c_ulong),
-        ('hardwareVersion', CK_INFO),
-        ('firmwareVersion', CK_INFO),
+        ('hardwareVersion', CK_VERSION),
+        ('firmwareVersion', CK_VERSION),
         ('utcTime', ctypes.c_char * 16),
     ]
 
