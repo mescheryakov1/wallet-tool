@@ -1,4 +1,5 @@
 import ctypes
+import sys
 
 # Константы
 CKA_CLASS = 0x00000000  # Тип объекта
@@ -18,9 +19,13 @@ CKF_RW_SESSION = 1 << 2  # 0x00000004
 CK_VOID_PTR = ctypes.c_void_p
 
 class CK_VERSION(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
     _fields_ = [('major', ctypes.c_ubyte), ('minor', ctypes.c_ubyte)]
 
 class CK_INFO(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
     _fields_ = [
         ('cryptokiVersion', CK_VERSION),
         ('manufacturerID', ctypes.c_char * 32),
@@ -30,6 +35,8 @@ class CK_INFO(ctypes.Structure):
     ]
 
 class CK_SLOT_INFO(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
     _fields_ = [
         ('slotDescription', ctypes.c_char * 64),
         ('manufacturerID', ctypes.c_char * 32),
@@ -39,6 +46,8 @@ class CK_SLOT_INFO(ctypes.Structure):
     ]
 
 class CK_TOKEN_INFO(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
     _fields_ = [
         ('label', ctypes.c_char * 32),
         ('manufacturerID', ctypes.c_char * 32),
@@ -61,6 +70,8 @@ class CK_TOKEN_INFO(ctypes.Structure):
     ]
 
 class CK_ATTRIBUTE(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
     _fields_ = [
         ('type', ctypes.c_ulong),
         ('pValue', ctypes.c_void_p),
