@@ -2,14 +2,20 @@ import ctypes
 import sys
 
 # Константы
+# Значения классов объектов согласно спецификации PKCS#11
 CKA_CLASS = 0x00000000  # Тип объекта
-CKO_CERTIFICATE = 0x00000001  # Объект сертификата
-CKO_PRIVATE_KEY = 0x00000002  # Объект закрытого ключа
-CKO_PUBLIC_KEY = 0x00000003  # Объект открытого ключа
-CKO_SECRET_KEY = 0x00000004  # Объект секретного ключа
-CKO_DATA = 0x00000005  # Объект данных
-CKO_DOMAIN_PARAMETERS = 0x00000006  # Объект параметров домена
-CKO_HW_FEATURE = 0x00000007  # Объект аппаратного обеспечения
+CKO_DATA = 0x00000000
+CKO_CERTIFICATE = 0x00000001
+CKO_PUBLIC_KEY = 0x00000002
+CKO_PRIVATE_KEY = 0x00000003
+CKO_SECRET_KEY = 0x00000004
+CKO_HW_FEATURE = 0x00000005
+CKO_DOMAIN_PARAMETERS = 0x00000006
+
+# Наиболее часто используемые атрибуты
+CKA_LABEL = 0x00000003
+CKA_VALUE = 0x00000011
+CKA_ID = 0x00000102
 
 CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
@@ -70,8 +76,7 @@ class CK_TOKEN_INFO(ctypes.Structure):
     ]
 
 class CK_ATTRIBUTE(ctypes.Structure):
-    if sys.platform.startswith("win"):
-        _pack_ = 1
+    _pack_ = 1
     _fields_ = [
         ('type', ctypes.c_ulong),
         ('pValue', ctypes.c_void_p),
