@@ -16,6 +16,41 @@ from pkcs11_structs import (
 )
 from pkcs11_definitions import define_pkcs11_functions
 
+
+def format_attribute_value(value: bytes, mode: str) -> str:
+    """Return string representation of attribute value.
+
+    Parameters
+    ----------
+    value: bytes
+        Raw value returned from PKCS#11.
+    mode: str
+        Either ``"hex"`` or ``"text"``.
+
+    Returns
+    -------
+    str
+        String suitable for console output. If value cannot be represented in
+        requested mode, ``"двоичные данные"`` is returned.
+    """
+
+    if mode == "hex":
+        hex_part = " ".join(f"{b:02X}" for b in value[:30])
+        if len(value) > 30:
+            hex_part += " ..."
+        return hex_part
+
+    if mode == "text":
+        try:
+            decoded = value.decode("utf-8")
+        except UnicodeDecodeError:
+            return "двоичные данные"
+        if not all(ch.isprintable() or ch.isspace() for ch in decoded):
+            return "двоичные данные"
+        return decoded
+
+    raise ValueError(f"Unknown mode {mode}")
+
 @pkcs11_command
 def library_info(pkcs11):
     define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
@@ -184,29 +219,16 @@ def list_objects(pkcs11, slot_id, pin):
                 print(f'    Ошибка получения {attr_name}: 0x{rv:08X}')
                 continue
 
-            # Если размер атрибута больше 0, получаем его значение
             if attr_template.ulValueLen > 0:
-                value = (ctypes.c_ubyte * attr_template.ulValueLen)()
-                attr_template.pValue = ctypes.cast(value, ctypes.c_void_p)
+                buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
+                attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
                 rv = pkcs11.C_GetAttributeValue(session, obj, ctypes.byref(attr_template), 1)
                 if rv == 0:
-                    if attr_name == "CKA_VALUE":
-                        # Ограничиваем вывод первых 64 символов
-                        value_str = bytes(value).decode('utf-8', errors='ignore').replace('\x00', ' ')
-                        truncated_value = value_str[:64]
-                        skipped_chars = len(value_str) - 64 if len(value_str) > 64 else 0
-                        print(f'    {attr_name}: {truncated_value} (пропущено {skipped_chars} символов)')
-                    else:
-                        # Проверяем, содержит ли значение непечатные символы
-                        try:
-                            decoded_value = bytes(value).decode('utf-8')
-                            if all(32 <= ord(c) <= 126 for c in decoded_value):
-                                print(f'    {attr_name} (TEXT): {decoded_value}')
-                            else:
-                                raise ValueError
-                        except ValueError:
-                            hex_value = " ".join(f"{b:02X}" for b in value)
-                            print(f'    {attr_name} (HEX): {hex_value}')
+                    raw = bytes(buf)
+                    hex_repr = format_attribute_value(raw, "hex")
+                    text_repr = format_attribute_value(raw, "text")
+                    print(f'    {attr_name} (HEX): {hex_repr}')
+                    print(f'    {attr_name} (TEXT): {text_repr}')
                 else:
                     print(f'    Ошибка получения значения {attr_name}: 0x{rv:08X}')
 
