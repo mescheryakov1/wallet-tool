@@ -101,3 +101,20 @@ def test_list_objects_no_wallet(monkeypatch, capsys):
 
     captured = capsys.readouterr()
     assert "Нет подключенного кошелька" in captured.out
+
+
+def test_format_attribute_value_text():
+    data = b"hello"
+    assert commands.format_attribute_value(data, "text") == "hello"
+
+
+def test_format_attribute_value_binary_text():
+    data = b"\x00\x01\x02"
+    assert commands.format_attribute_value(data, "text") == "двоичные данные"
+
+
+def test_format_attribute_value_hex_truncate():
+    data = bytes(range(40))
+    out = commands.format_attribute_value(data, "hex")
+    assert out.startswith("00 01 02")
+    assert out.endswith("...")
