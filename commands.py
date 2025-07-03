@@ -12,6 +12,7 @@ from pkcs11_structs import (
     CKO_PUBLIC_KEY,
     CKF_SERIAL_SESSION,
     CKF_RW_SESSION,
+    CKR_TOKEN_NOT_PRESENT,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -47,7 +48,9 @@ def factory_reset(pkcs11, slot_id, pin, label):
         return
 
     rv = pkcs11.C_EX_InitToken(slot_id, pin_bytes, label)
-    if rv != 0:
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+    elif rv != 0:
         print(f'C_EX_InitToken вернула ошибку: 0x{rv:08X}')
     else:
         print('Фабричный сброс выполнен успешно.')
@@ -87,6 +90,10 @@ def list_wallets(pkcs11):
         print(f'C_GetSlotList вернула ошибку: 0x{rv:08X}')
         return
 
+    if count.value == 0:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+
     # Получаем список слотов
     slots = (ctypes.c_ulong * count.value)()
     rv = pkcs11.C_GetSlotList(True, slots, ctypes.byref(count))
@@ -119,6 +126,9 @@ def list_objects(pkcs11, slot_id, pin):
     # Открываем сессию
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
     if rv != 0:
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
