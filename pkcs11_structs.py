@@ -20,6 +20,9 @@ CKA_ID = 0x00000102
 CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
 
+# Возвращаемое значение PKCS#11 при отсутствии токена в слоте
+CKR_TOKEN_NOT_PRESENT = 0x000000E0
+
 # Структуры PKCS#11
 
 CK_VOID_PTR = ctypes.c_void_p
