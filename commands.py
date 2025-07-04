@@ -197,6 +197,7 @@ def list_objects(pkcs11, slot_id, pin):
     print('Список ключей в кошельке:')
     obj = ctypes.c_ulong()
     count = ctypes.c_ulong()
+    index = 1
     while True:
         rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
         if rv != 0 or count.value == 0:
@@ -209,7 +210,8 @@ def list_objects(pkcs11, slot_id, pin):
             (CKA_VALUE, "CKA_VALUE"),  # Значение ключа
         ]
 
-        print(f'  ID ключа: {obj.value}')
+        print(f'  Ключ #{index}:')
+        index += 1
         for attr_type, attr_name in attributes:
             attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
 

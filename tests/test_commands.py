@@ -103,6 +103,49 @@ def test_list_objects_no_wallet(monkeypatch, capsys):
     assert "Нет подключенного кошелька" in captured.out
 
 
+def test_list_objects_numbering(monkeypatch, capsys):
+    """Objects are numbered sequentially when printed."""
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 321
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+    pkcs11_mock.C_Login = lambda *args: 0
+    pkcs11_mock.C_FindObjectsInit = lambda *args: 0
+    objects = [100, 200]
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if objects:
+            obj_ptr._obj.value = objects.pop(0)
+            count_ptr._obj.value = 1
+        else:
+            count_ptr._obj.value = 0
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda *args: 0
+    pkcs11_mock.C_CloseSession = lambda *args: 0
+
+    def get_attr(session, obj, template_ptr, count):
+        template_ptr._obj.ulValueLen = 0
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attr
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_objects(slot_id=1, pin="0000")
+
+    captured = capsys.readouterr()
+    assert "Ключ #1" in captured.out
+    assert "Ключ #2" in captured.out
+
+
 def test_format_attribute_value_text():
     data = b"hello"
     assert commands.format_attribute_value(data, "text") == "hello"
