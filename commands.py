@@ -10,6 +10,7 @@ from pkcs11_structs import (
     CKA_ID,
     CKA_VALUE,
     CKO_PUBLIC_KEY,
+    CKO_PRIVATE_KEY,
     CKF_SERIAL_SESSION,
     CKF_RW_SESSION,
     CKR_TOKEN_NOT_PRESENT,
@@ -155,10 +156,9 @@ def list_wallets(pkcs11):
 
 @pkcs11_command
 def list_objects(pkcs11, slot_id, pin):
-    """Ищет ключи в кошельке и выводит их атрибуты."""
-    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
+    """Выводит список ключей. Если PIN не задан, показываются только публичные ключи."""
+    define_pkcs11_functions(pkcs11)
 
-    # Открываем сессию
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
     if rv == CKR_TOKEN_NOT_PRESENT:
@@ -168,72 +168,91 @@ def list_objects(pkcs11, slot_id, pin):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
-    # Выполняем логин
+    logged_in = False
     if pin:
         rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
         if rv != 0:
             print(f'C_Login вернула ошибку: 0x{rv:08X}')
             pkcs11.C_CloseSession(session)
             return
+        logged_in = True
+    else:
+        print('Закрытые ключи не отображаются без ввода PIN-кода')
 
-    # Готовим шаблон поиска: объекты класса "публичный ключ"
-    class_val = ctypes.c_ulong(CKO_PUBLIC_KEY)
-    attr = CK_ATTRIBUTE()
-    attr.type = CKA_CLASS
-    attr.pValue = ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p)
-    attr.ulValueLen = ctypes.sizeof(class_val)
+    def search_objects(obj_class):
+        class_val = ctypes.c_ulong(obj_class)
+        attr = CK_ATTRIBUTE()
+        attr.type = CKA_CLASS
+        attr.pValue = ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p)
+        attr.ulValueLen = ctypes.sizeof(class_val)
+        template = (CK_ATTRIBUTE * 1)(attr)
 
-    template = (CK_ATTRIBUTE * 1)(attr)
+        rv = pkcs11.C_FindObjectsInit(session.value, template, 1)
+        if rv != 0:
+            print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
+            return []
 
-    # 4) инициализируем поиск
- 
-    rv = pkcs11.C_FindObjectsInit(session.value, template, len(template))
-    if rv != 0:
-        print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
-        pkcs11.C_CloseSession(session)
-        return
+        handles = []
+        obj = ctypes.c_ulong()
+        count = ctypes.c_ulong()
+        while True:
+            rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
+            if rv != 0 or count.value == 0:
+                break
+            handles.append(obj.value)
+        pkcs11.C_FindObjectsFinal(session)
+        return handles
 
-    # Ищем объекты
-    print('Список ключей в кошельке:')
-    obj = ctypes.c_ulong()
-    count = ctypes.c_ulong()
-    while True:
-        rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
-        if rv != 0 or count.value == 0:
-            break
-
-        # Получаем атрибуты объекта
-        attributes = [
-            (CKA_LABEL, "CKA_LABEL"),  # Метка
-            (CKA_ID, "CKA_ID"),        # Идентификатор
-            (CKA_VALUE, "CKA_VALUE"),  # Значение ключа
-        ]
-
-        print(f'  ID ключа: {obj.value}')
-        for attr_type, attr_name in attributes:
+    def get_attributes(handle):
+        attrs = {}
+        for attr_type, attr_name in [
+            (CKA_LABEL, 'CKA_LABEL'),
+            (CKA_ID, 'CKA_ID'),
+            (CKA_VALUE, 'CKA_VALUE'),
+        ]:
             attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
-
-            # Сначала получаем размер атрибута
-            rv = pkcs11.C_GetAttributeValue(session, obj, ctypes.byref(attr_template), 1)
-            if rv != 0:
-                print(f'    Ошибка получения {attr_name}: 0x{rv:08X}')
+            rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
+            if rv != 0 or attr_template.ulValueLen == 0:
                 continue
+            buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
+            attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
+            rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
+            if rv == 0:
+                attrs[attr_name] = bytes(buf)
+        return attrs
 
-            if attr_template.ulValueLen > 0:
-                buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
-                attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
-                rv = pkcs11.C_GetAttributeValue(session, obj, ctypes.byref(attr_template), 1)
-                if rv == 0:
-                    raw = bytes(buf)
+    objects = {}
+    for h in search_objects(CKO_PUBLIC_KEY):
+        attrs = get_attributes(h)
+        objects.setdefault(attrs.get('CKA_ID'), {})['public'] = (h, attrs)
+
+    if logged_in:
+        for h in search_objects(CKO_PRIVATE_KEY):
+            attrs = get_attributes(h)
+            objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
+
+    print('Список ключей в кошельке:')
+    for key_id in sorted(objects.keys(), key=lambda x: x or b''):
+        pair = objects[key_id]
+        if 'public' in pair:
+            h, attrs = pair['public']
+            print(f'  Публичный ключ, ID объекта: {h}')
+            for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                if name in attrs:
+                    raw = attrs[name]
                     hex_repr = format_attribute_value(raw, "hex")
                     text_repr = format_attribute_value(raw, "text")
-                    print(f'    {attr_name} (HEX): {hex_repr}')
-                    print(f'    {attr_name} (TEXT): {text_repr}')
-                else:
-                    print(f'    Ошибка получения значения {attr_name}: 0x{rv:08X}')
+                    print(f'    {name} (HEX): {hex_repr}')
+                    print(f'    {name} (TEXT): {text_repr}')
+        if 'private' in pair:
+            h, attrs = pair['private']
+            print(f'  Закрытый ключ, ID объекта: {h}')
+            for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                if name in attrs:
+                    raw = attrs[name]
+                    hex_repr = format_attribute_value(raw, "hex")
+                    text_repr = format_attribute_value(raw, "text")
+                    print(f'    {name} (HEX): {hex_repr}')
+                    print(f'    {name} (TEXT): {text_repr}')
 
-    # Завершаем поиск объектов
-    pkcs11.C_FindObjectsFinal(session)
-
-    # Закрываем сессию
     pkcs11.C_CloseSession(session)
