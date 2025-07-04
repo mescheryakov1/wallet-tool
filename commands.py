@@ -232,27 +232,28 @@ def list_objects(pkcs11, slot_id, pin):
             objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
 
     print('Список ключей в кошельке:')
-    for key_id in sorted(objects.keys(), key=lambda x: x or b''):
+    for idx, key_id in enumerate(sorted(objects.keys(), key=lambda x: x or b''), start=1):
         pair = objects[key_id]
+        print(f'  Ключ \N{numero sign}{idx}:')
         if 'public' in pair:
             h, attrs = pair['public']
-            print(f'  Публичный ключ, ID объекта: {h}')
+            print('    Публичный ключ')
             for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
                 if name in attrs:
                     raw = attrs[name]
                     hex_repr = format_attribute_value(raw, "hex")
                     text_repr = format_attribute_value(raw, "text")
-                    print(f'    {name} (HEX): {hex_repr}')
-                    print(f'    {name} (TEXT): {text_repr}')
+                    print(f'      {name} (HEX): {hex_repr}')
+                    print(f'      {name} (TEXT): {text_repr}')
         if 'private' in pair:
             h, attrs = pair['private']
-            print(f'  Закрытый ключ, ID объекта: {h}')
+            print('    Закрытый ключ')
             for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
                 if name in attrs:
                     raw = attrs[name]
                     hex_repr = format_attribute_value(raw, "hex")
                     text_repr = format_attribute_value(raw, "text")
-                    print(f'    {name} (HEX): {hex_repr}')
-                    print(f'    {name} (TEXT): {text_repr}')
+                    print(f'      {name} (HEX): {hex_repr}')
+                    print(f'      {name} (TEXT): {text_repr}')
 
     pkcs11.C_CloseSession(session)
