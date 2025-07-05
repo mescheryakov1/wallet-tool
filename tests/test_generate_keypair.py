@@ -32,8 +32,10 @@ def make_pkcs11_mock(captured):
                 elif attr.type in (structs.CKA_TOKEN, structs.CKA_PRIVATE):
                     val = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ubyte)).contents.value
                     captured[f'{prefix}_{attr.type}'] = val
-                elif attr.type in (structs.CKA_ID, structs.CKA_LABEL):
-                    buf = (ctypes.c_char * attr.ulValueLen).from_address(attr.pValue)
+                elif attr.type in (structs.CKA_ID, structs.CKA_LABEL,
+                                   structs.CKA_GOSTR3410_PARAMS,
+                                   structs.CKA_GOSTR3411_PARAMS):
+                    buf = (ctypes.c_ubyte * attr.ulValueLen).from_address(attr.pValue)
                     captured[f'{prefix}_{attr.type}'] = bytes(buf)
 
         read_attrs(pub_tpl, pub_count, 'pub')
@@ -107,5 +109,23 @@ def test_generate_missing_id_label(monkeypatch, capsys):
     assert captured == {}
     err = capsys.readouterr().err
     assert 'key-id' in err and 'key-label' in err
+
+
+def test_generate_gost_params(monkeypatch):
+    captured = {}
+    setup(monkeypatch, captured)
+
+    commands.generate_key_pair(
+        slot_id=1,
+        pin='1111',
+        algorithm='gost',
+        cka_id='GG',
+        cka_label='lbl',
+    )
+
+    assert captured['mechanism'] == structs.CKM_GOSTR3410_KEY_PAIR_GEN
+    assert 'pub_%d' % structs.CKA_GOSTR3410_PARAMS in captured
+    assert 'pub_%d' % structs.CKA_GOSTR3411_PARAMS in captured
+    assert 'priv_%d' % structs.CKA_GOSTR3411_PARAMS in captured
 
 
