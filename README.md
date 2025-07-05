@@ -6,5 +6,7 @@ specified.
 
 ```
 python main.py --generate-key ed25519 --pin 0000 --key-id myid --key-label mylabel
+python main.py --generate-key gost --pin 0000 --key-id myid --key-label mylabel
 python main.py --delete-key 1 --pin 0000
 ```
+GOST key generation also requires ``--key-id`` and ``--key-label``.

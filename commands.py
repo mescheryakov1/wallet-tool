@@ -26,6 +26,7 @@ from pkcs11_structs import (
     CKA_PUBLIC_EXPONENT,
     CKA_EC_PARAMS,
     CKA_GOSTR3410_PARAMS,
+    CKA_GOSTR3411_PARAMS,
     CKM_RSA_PKCS_KEY_PAIR_GEN,
     CKM_EC_KEY_PAIR_GEN,
     CKM_EC_EDWARDS_KEY_PAIR_GEN,
@@ -454,6 +455,17 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
             type=CKA_GOSTR3410_PARAMS,
             pValue=ctypes.cast(oid, ctypes.c_void_p),
             ulValueLen=11,
+        ))
+        hash_oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x02, 0x01)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_GOSTR3411_PARAMS,
+            pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
+            ulValueLen=10,
+        ))
+        priv_attrs.append(CK_ATTRIBUTE(
+            type=CKA_GOSTR3411_PARAMS,
+            pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
+            ulValueLen=10,
         ))
     else:
         print('Неверный тип ключа')
