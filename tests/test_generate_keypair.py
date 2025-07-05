@@ -92,3 +92,20 @@ def test_generate_ed25519(monkeypatch):
     assert captured['priv_%d' % structs.CKA_LABEL] == b'x'
 
 
+def test_generate_missing_id_label(monkeypatch, capsys):
+    captured = {}
+    setup(monkeypatch, captured)
+
+    commands.generate_key_pair(
+        slot_id=1,
+        pin='1111',
+        algorithm='ed25519',
+        cka_id='',
+        cka_label='',
+    )
+
+    assert captured == {}
+    err = capsys.readouterr().err
+    assert 'key-id' in err and 'key-label' in err
+
+
