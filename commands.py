@@ -498,14 +498,17 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
-    logged_in = False
-    if pin:
-        rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
-        if rv != 0:
-            print(f'C_Login вернула ошибку: 0x{rv:08X}')
-            pkcs11.C_CloseSession(session)
-            return
-        logged_in = True
+    if not pin:
+        print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
+        pkcs11.C_CloseSession(session)
+        return
+
+    rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+    if rv != 0:
+        print(f'C_Login вернула ошибку: 0x{rv:08X}')
+        pkcs11.C_CloseSession(session)
+        return
+    logged_in = True
 
     def search_objects(obj_class):
         class_val = ctypes.c_ulong(obj_class)
