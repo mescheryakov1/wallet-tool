@@ -57,13 +57,16 @@ def main():
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
     elif args.generate_key:
-        generate_key_pair(
-            args.slot_id,
-            args.pin,
-            args.generate_key,
-            cka_id=args.key_id,
-            cka_label=args.key_label,
-        )
+        if not args.key_id or not args.key_label:
+            print('Необходимо указать --key-id и --key-label для генерации ключа', file=sys.stderr)
+        else:
+            generate_key_pair(
+                args.slot_id,
+                args.pin,
+                args.generate_key,
+                cka_id=args.key_id,
+                cka_label=args.key_label,
+            )
     elif args.delete_key is not None:
         delete_key_pair(args.slot_id, args.pin, args.delete_key)
     else:

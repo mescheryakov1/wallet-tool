@@ -327,6 +327,11 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
+    if not cka_id or not cka_label:
+        print('Необходимо указать key-id и key-label для генерации ключа', file=sys.stderr)
+        pkcs11.C_CloseSession(session)
+        return
+
     if not pin:
         print('Необходимо указать PIN-код для генерации ключа', file=sys.stderr)
         pkcs11.C_CloseSession(session)
