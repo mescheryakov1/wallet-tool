@@ -1,6 +1,13 @@
 import argparse
 import sys
-from commands import library_info, factory_reset, list_slots, list_wallets, list_objects
+from commands import (
+    library_info,
+    factory_reset,
+    list_slots,
+    list_wallets,
+    list_objects,
+    generate_key_pair,
+)
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
 if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
@@ -23,6 +30,8 @@ def main():
                         help='Метка для фабричного сброса (по умолчанию пустая строка)')
     parser.add_argument('--list-objects', action='store_true',
                         help='Показать список объектов в кошельке')
+    parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
+                        help='Сгенерировать ключевую пару указанного типа')
     parser.add_argument('--slot-id', type=int, default=0,
                         help='Идентификатор слота для выполнения команды (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default=None,
@@ -40,6 +49,8 @@ def main():
         factory_reset(args.slot_id, args.pin, args.label)
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
+    elif args.generate_key:
+        generate_key_pair(args.slot_id, args.pin, args.generate_key)
     else:
         parser.print_help()
 

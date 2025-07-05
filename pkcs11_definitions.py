@@ -47,3 +47,15 @@ def define_pkcs11_functions(pkcs11):
         ctypes.c_ulong,  # ulCount
     ]
     pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
+
+    # C_GenerateKeyPair
+    from pkcs11_structs import CK_MECHANISM
+    pkcs11.C_GenerateKeyPair.argtypes = [
+        ctypes.c_ulong,                         # CK_SESSION_HANDLE
+        ctypes.POINTER(CK_MECHANISM),           # CK_MECHANISM_PTR
+        ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong,  # public template
+        ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong,  # private template
+        ctypes.POINTER(ctypes.c_ulong),         # CK_OBJECT_HANDLE_PTR (public)
+        ctypes.POINTER(ctypes.c_ulong),         # CK_OBJECT_HANDLE_PTR (private)
+    ]
+    pkcs11.C_GenerateKeyPair.restype = ctypes.c_ulong
