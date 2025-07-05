@@ -8,14 +8,28 @@ from pkcs11_structs import (
     CKA_CLASS,
     CKA_LABEL,
     CKA_ID,
+    CKA_KEY_TYPE,
     CKA_VALUE,
     CKO_PUBLIC_KEY,
     CKO_PRIVATE_KEY,
     CKF_SERIAL_SESSION,
     CKF_RW_SESSION,
     CKR_TOKEN_NOT_PRESENT,
+    CKK_RSA,
+    CKK_EC,
+    CKK_EC_EDWARDS,
+    CKK_EC_MONTGOMERY,
+    CKK_GOSTR3410,
 )
 from pkcs11_definitions import define_pkcs11_functions
+
+key_type_description = {
+    CKK_RSA: "RSA",
+    CKK_EC: "ECDSA (bitcoin, ethereum, tron и т.д.)",
+    CKK_EC_EDWARDS: "EdDSA (solana, ton и т.д.)",
+    CKK_EC_MONTGOMERY: "EdDSA (solana, ton и т.д.)",
+    CKK_GOSTR3410: "ГОСТ 34.10-2012",
+}
 
 
 def format_attribute_value(value: bytes, mode: str) -> str:
@@ -209,6 +223,7 @@ def list_objects(pkcs11, slot_id, pin):
             (CKA_LABEL, 'CKA_LABEL'),
             (CKA_ID, 'CKA_ID'),
             (CKA_VALUE, 'CKA_VALUE'),
+            (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
         ]:
             attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
             rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
@@ -218,7 +233,10 @@ def list_objects(pkcs11, slot_id, pin):
             attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
             rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
             if rv == 0:
-                attrs[attr_name] = bytes(buf)
+                if attr_type == CKA_KEY_TYPE:
+                    attrs[attr_name] = int.from_bytes(bytes(buf), sys.byteorder)
+                else:
+                    attrs[attr_name] = bytes(buf)
         return attrs
 
     objects = {}
@@ -234,7 +252,13 @@ def list_objects(pkcs11, slot_id, pin):
     print('Список ключей в кошельке:')
     for idx, key_id in enumerate(sorted(objects.keys(), key=lambda x: x or b''), start=1):
         pair = objects[key_id]
-        print(f'  Ключ \N{numero sign}{idx}:')
+        key_type = None
+        if 'public' in pair and 'CKA_KEY_TYPE' in pair['public'][1]:
+            key_type = pair['public'][1]['CKA_KEY_TYPE']
+        elif 'private' in pair and 'CKA_KEY_TYPE' in pair['private'][1]:
+            key_type = pair['private'][1]['CKA_KEY_TYPE']
+        suffix = f" ({key_type_description.get(key_type)})" if key_type in key_type_description else ''
+        print(f'  Ключ \N{numero sign}{idx}{suffix}:')
         if 'public' in pair:
             h, attrs = pair['public']
             print('    Публичный ключ')
