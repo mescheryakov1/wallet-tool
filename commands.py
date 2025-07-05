@@ -20,6 +20,17 @@ from pkcs11_structs import (
     CKK_EC_EDWARDS,
     CKK_EC_MONTGOMERY,
     CKK_GOSTR3410,
+    CKA_TOKEN,
+    CKA_PRIVATE,
+    CKA_MODULUS_BITS,
+    CKA_PUBLIC_EXPONENT,
+    CKA_EC_PARAMS,
+    CKA_GOSTR3410_PARAMS,
+    CKM_RSA_PKCS_KEY_PAIR_GEN,
+    CKM_EC_KEY_PAIR_GEN,
+    CKM_EC_EDWARDS_KEY_PAIR_GEN,
+    CKM_GOSTR3410_KEY_PAIR_GEN,
+    CK_MECHANISM,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -290,5 +301,105 @@ def list_objects(pkcs11, slot_id, pin):
                     text_repr = format_attribute_value(raw, "text")
                     print(f'      {name} (HEX): {hex_repr}')
                     print(f'      {name} (TEXT): {text_repr}')
+
+    pkcs11.C_CloseSession(session)
+
+
+@pkcs11_command
+def generate_key_pair(pkcs11, slot_id, pin, algorithm):
+    """Generate key pair on token."""
+    define_pkcs11_functions(pkcs11)
+
+    session = ctypes.c_ulong()
+    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+        return
+
+    if not pin:
+        print('Необходимо указать PIN-код для генерации ключа', file=sys.stderr)
+        pkcs11.C_CloseSession(session)
+        return
+
+    rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+    if rv != 0:
+        print(f'C_Login вернула ошибку: 0x{rv:08X}')
+        pkcs11.C_CloseSession(session)
+        return
+
+    mechanism = CK_MECHANISM(mechanism=0, pParameter=None, ulParameterLen=0)
+    pub_attrs = []
+    priv_attrs = [
+        CK_ATTRIBUTE(type=CKA_TOKEN, pValue=None, ulValueLen=0),
+        CK_ATTRIBUTE(type=CKA_PRIVATE, pValue=None, ulValueLen=0),
+    ]
+
+    if algorithm == 'rsa1024' or algorithm == 'rsa2048':
+        mechanism.mechanism = CKM_RSA_PKCS_KEY_PAIR_GEN
+        bits = 1024 if algorithm == 'rsa1024' else 2048
+        bits_val = ctypes.c_ulong(bits)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_MODULUS_BITS,
+            pValue=ctypes.cast(ctypes.pointer(bits_val), ctypes.c_void_p),
+            ulValueLen=ctypes.sizeof(bits_val),
+        ))
+        exp = (ctypes.c_ubyte * 3)(0x01, 0x00, 0x01)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_PUBLIC_EXPONENT,
+            pValue=ctypes.cast(exp, ctypes.c_void_p),
+            ulValueLen=3,
+        ))
+    elif algorithm == 'secp256':
+        mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
+        oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_EC_PARAMS,
+            pValue=ctypes.cast(oid, ctypes.c_void_p),
+            ulValueLen=10,
+        ))
+    elif algorithm == 'ed25519':
+        mechanism.mechanism = CKM_EC_EDWARDS_KEY_PAIR_GEN
+        oid = (ctypes.c_ubyte * 5)(0x06, 0x03, 0x2B, 0x65, 0x70)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_EC_PARAMS,
+            pValue=ctypes.cast(oid, ctypes.c_void_p),
+            ulValueLen=5,
+        ))
+    elif algorithm == 'gost':
+        mechanism.mechanism = CKM_GOSTR3410_KEY_PAIR_GEN
+        oid = (ctypes.c_ubyte * 11)(0x06, 0x09, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x01)
+        pub_attrs.append(CK_ATTRIBUTE(
+            type=CKA_GOSTR3410_PARAMS,
+            pValue=ctypes.cast(oid, ctypes.c_void_p),
+            ulValueLen=11,
+        ))
+    else:
+        print('Неверный тип ключа')
+        pkcs11.C_CloseSession(session)
+        return
+
+    pub_template = (CK_ATTRIBUTE * len(pub_attrs))(*pub_attrs)
+    priv_template = (CK_ATTRIBUTE * len(priv_attrs))(*priv_attrs)
+    pub_handle = ctypes.c_ulong()
+    priv_handle = ctypes.c_ulong()
+
+    rv = pkcs11.C_GenerateKeyPair(
+        session,
+        ctypes.byref(mechanism),
+        pub_template,
+        len(pub_attrs),
+        priv_template,
+        len(priv_attrs),
+        ctypes.byref(pub_handle),
+        ctypes.byref(priv_handle),
+    )
+
+    if rv != 0:
+        print(f'C_GenerateKeyPair вернула ошибку: 0x{rv:08X}')
+    else:
+        print('Ключевая пара успешно сгенерирована.')
 
     pkcs11.C_CloseSession(session)
