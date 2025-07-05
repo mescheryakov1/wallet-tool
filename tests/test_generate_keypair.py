@@ -126,6 +126,7 @@ def test_generate_gost_params(monkeypatch):
     assert captured['mechanism'] == structs.CKM_GOSTR3410_KEY_PAIR_GEN
     assert 'pub_%d' % structs.CKA_GOSTR3410_PARAMS in captured
     assert 'pub_%d' % structs.CKA_GOSTR3411_PARAMS in captured
+    assert 'priv_%d' % structs.CKA_GOSTR3410_PARAMS in captured
     assert 'priv_%d' % structs.CKA_GOSTR3411_PARAMS in captured
 
 

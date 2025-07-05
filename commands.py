@@ -467,6 +467,11 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
             pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
             ulValueLen=10,
         ))
+        priv_attrs.append(CK_ATTRIBUTE(
+            type=CKA_GOSTR3410_PARAMS,
+            pValue=ctypes.cast(oid, ctypes.c_void_p),
+            ulValueLen=11,
+        ))
     else:
         print('Неверный тип ключа')
         pkcs11.C_CloseSession(session)
