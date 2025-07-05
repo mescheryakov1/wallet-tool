@@ -268,3 +268,21 @@ def test_list_objects_prints_ec_key_type(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "ECDSA" in out
     assert "bitcoin" in out
+
+
+def test_generate_secp256k1_length(capsys):
+    commands.generate_secp256k1()
+    out_lines = capsys.readouterr().out.splitlines()
+    priv = out_lines[1].split(":")[1].strip()
+    pub = out_lines[2].split(":")[1].strip()
+    assert len(priv) == 64
+    assert len(pub) == 128
+
+
+def test_generate_ed25519_length(capsys):
+    commands.generate_ed25519()
+    out_lines = capsys.readouterr().out.splitlines()
+    priv = out_lines[1].split(":")[1].strip()
+    pub = out_lines[2].split(":")[1].strip()
+    assert len(priv) == 64
+    assert len(pub) == 64

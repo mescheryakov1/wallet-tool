@@ -1,6 +1,14 @@
 import argparse
 import sys
-from commands import library_info, factory_reset, list_slots, list_wallets, list_objects
+from commands import (
+    library_info,
+    factory_reset,
+    list_slots,
+    list_wallets,
+    list_objects,
+    generate_secp256k1,
+    generate_ed25519,
+)
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
 if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
@@ -23,6 +31,10 @@ def main():
                         help='Метка для фабричного сброса (по умолчанию пустая строка)')
     parser.add_argument('--list-objects', action='store_true',
                         help='Показать список объектов в кошельке')
+    parser.add_argument('--gen-secp256k1', action='store_true',
+                        help='Сгенерировать пару ключей ECDSA secp256k1')
+    parser.add_argument('--gen-ed25519', action='store_true',
+                        help='Сгенерировать пару ключей EdDSA ed25519')
     parser.add_argument('--slot-id', type=int, default=0,
                         help='Идентификатор слота для выполнения команды (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default=None,
@@ -40,6 +52,10 @@ def main():
         factory_reset(args.slot_id, args.pin, args.label)
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
+    elif args.gen_secp256k1:
+        generate_secp256k1()
+    elif args.gen_ed25519:
+        generate_ed25519()
     else:
         parser.print_help()
 

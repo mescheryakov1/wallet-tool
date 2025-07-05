@@ -1,5 +1,6 @@
 import ctypes
 import sys
+from ecdsa import SigningKey, SECP256k1, Ed25519
 from pkcs11 import pkcs11_command
 from pkcs11_structs import (
     CK_INFO,
@@ -281,3 +282,21 @@ def list_objects(pkcs11, slot_id, pin):
                     print(f'      {name} (TEXT): {text_repr}')
 
     pkcs11.C_CloseSession(session)
+
+
+def generate_secp256k1() -> None:
+    """Generate an ECDSA secp256k1 key pair and print it."""
+    sk = SigningKey.generate(curve=SECP256k1)
+    vk = sk.verifying_key
+    print("ECDSA secp256k1 key pair generated:")
+    print(f"  Private key: {sk.to_string().hex()}")
+    print(f"  Public key: {vk.to_string().hex()}")
+
+
+def generate_ed25519() -> None:
+    """Generate an EdDSA ed25519 key pair and print it."""
+    sk = SigningKey.generate(curve=Ed25519)
+    vk = sk.verifying_key
+    print("EdDSA ed25519 key pair generated:")
+    print(f"  Private key: {sk.to_string().hex()}")
+    print(f"  Public key: {vk.to_string().hex()}")
