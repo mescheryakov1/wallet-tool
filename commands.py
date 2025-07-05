@@ -263,8 +263,10 @@ def list_objects(pkcs11, slot_id, pin):
             h, attrs = pair['public']
             print('    Публичный ключ')
             for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
-                if name in attrs:
-                    raw = attrs[name]
+                raw = attrs.get(name)
+                if raw is None and name == 'CKA_LABEL' and 'private' in pair:
+                    raw = pair['private'][1].get(name)
+                if raw is not None:
                     hex_repr = format_attribute_value(raw, "hex")
                     text_repr = format_attribute_value(raw, "text")
                     print(f'      {name} (HEX): {hex_repr}')
