@@ -249,6 +249,15 @@ def list_objects(pkcs11, slot_id, pin):
             attrs = get_attributes(h)
             objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
 
+    # If both public and private parts are found, copy label from private to
+    # public key when the latter lacks one.
+    for pair in objects.values():
+        if 'public' in pair and 'private' in pair:
+            pub_attrs = pair['public'][1]
+            priv_attrs = pair['private'][1]
+            if 'CKA_LABEL' not in pub_attrs and 'CKA_LABEL' in priv_attrs:
+                pub_attrs['CKA_LABEL'] = priv_attrs['CKA_LABEL']
+
     print('Список ключей в кошельке:')
     for idx, key_id in enumerate(sorted(objects.keys(), key=lambda x: x or b''), start=1):
         pair = objects[key_id]
