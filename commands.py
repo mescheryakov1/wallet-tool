@@ -403,3 +403,88 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm):
         print('Ключевая пара успешно сгенерирована.')
 
     pkcs11.C_CloseSession(session)
+
+
+@pkcs11_command
+def delete_key_pair(pkcs11, slot_id, pin, number):
+    """Delete key pair from token by its index."""
+    define_pkcs11_functions(pkcs11)
+
+    session = ctypes.c_ulong()
+    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+        return
+
+    logged_in = False
+    if pin:
+        rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+        if rv != 0:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            pkcs11.C_CloseSession(session)
+            return
+        logged_in = True
+
+    def search_objects(obj_class):
+        class_val = ctypes.c_ulong(obj_class)
+        attr = CK_ATTRIBUTE(type=CKA_CLASS,
+                            pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
+                            ulValueLen=ctypes.sizeof(class_val))
+        template = (CK_ATTRIBUTE * 1)(attr)
+        rv = pkcs11.C_FindObjectsInit(session.value, template, 1)
+        if rv != 0:
+            return []
+
+        handles = []
+        obj = ctypes.c_ulong()
+        count = ctypes.c_ulong()
+        while True:
+            rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
+            if rv != 0 or count.value == 0:
+                break
+            handles.append(obj.value)
+        pkcs11.C_FindObjectsFinal(session)
+        return handles
+
+    def get_id(handle):
+        attr = CK_ATTRIBUTE(type=CKA_ID, pValue=None, ulValueLen=0)
+        rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr), 1)
+        if rv != 0 or attr.ulValueLen == 0:
+            return None
+        buf = (ctypes.c_ubyte * attr.ulValueLen)()
+        attr.pValue = ctypes.cast(buf, ctypes.c_void_p)
+        rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr), 1)
+        if rv != 0:
+            return None
+        return bytes(buf)
+
+    objects = {}
+    for h in search_objects(CKO_PUBLIC_KEY):
+        key_id = get_id(h)
+        objects.setdefault(key_id, {})['public'] = h
+
+    if logged_in:
+        for h in search_objects(CKO_PRIVATE_KEY):
+            key_id = get_id(h)
+            objects.setdefault(key_id, {})['private'] = h
+
+    ids = sorted(objects.keys(), key=lambda x: x or b'')
+    if number < 1 or number > len(ids):
+        print('Ключ с таким номером не найден')
+        pkcs11.C_CloseSession(session)
+        return
+
+    pair = objects[ids[number - 1]]
+    if 'public' in pair:
+        rv = pkcs11.C_DestroyObject(session, pair['public'])
+        if rv != 0:
+            print(f'Ошибка удаления публичного ключа: 0x{rv:08X}')
+    if 'private' in pair:
+        rv = pkcs11.C_DestroyObject(session, pair['private'])
+        if rv != 0:
+            print(f'Ошибка удаления закрытого ключа: 0x{rv:08X}')
+
+    pkcs11.C_CloseSession(session)

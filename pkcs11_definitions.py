@@ -59,3 +59,10 @@ def define_pkcs11_functions(pkcs11):
         ctypes.POINTER(ctypes.c_ulong),         # CK_OBJECT_HANDLE_PTR (private)
     ]
     pkcs11.C_GenerateKeyPair.restype = ctypes.c_ulong
+
+    # C_DestroyObject
+    pkcs11.C_DestroyObject.argtypes = [
+        ctypes.c_ulong,  # CK_SESSION_HANDLE
+        ctypes.c_ulong,  # CK_OBJECT_HANDLE
+    ]
+    pkcs11.C_DestroyObject.restype = ctypes.c_ulong
