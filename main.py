@@ -1,6 +1,6 @@
 import argparse
 import sys
-from commands import library_info, factory_reset, list_slots, list_wallets, list_objects
+from commands import library_info, factory_reset, list_slots, list_wallets, list_objects, generate_key
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
 if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
@@ -27,6 +27,8 @@ def main():
                         help='Идентификатор слота для выполнения команды (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default=None,
                         help='PIN-код для выполнения команды (если требуется)')
+    parser.add_argument('--generate-key', type=str, default=None,
+                        help='Создать ключ "secp256k1" или "ed25519"')
 
     args = parser.parse_args()
 
@@ -40,6 +42,8 @@ def main():
         factory_reset(args.slot_id, args.pin, args.label)
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
+    elif args.generate_key:
+        generate_key(args.generate_key)
     else:
         parser.print_help()
 

@@ -343,3 +343,22 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     out = capsys.readouterr().out.splitlines()
     pub_index = out.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")
     assert any("CKA_LABEL" in line for line in out[pub_index:pub_index + 5])
+
+
+def test_generate_key_secp256k1(capsys):
+    commands.generate_key("secp256k1")
+    out = capsys.readouterr().out.splitlines()
+    assert any("\u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0439" in line for line in out)
+    priv = out[0].split(":", 1)[1].strip()
+    pub = out[1].split(":", 1)[1].strip()
+    assert len(priv) == 64
+    assert len(pub) == 128
+
+
+def test_generate_key_ed25519(capsys):
+    commands.generate_key("ed25519")
+    out = capsys.readouterr().out.splitlines()
+    priv = out[0].split(":", 1)[1].strip()
+    pub = out[1].split(":", 1)[1].strip()
+    assert len(priv) == 64
+    assert len(pub) == 64

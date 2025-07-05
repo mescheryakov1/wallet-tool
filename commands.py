@@ -1,6 +1,8 @@
 import ctypes
 import sys
 from pkcs11 import pkcs11_command
+from ecdsa import SECP256k1, SigningKey
+from ed25519 import create_keypair
 from pkcs11_structs import (
     CK_INFO,
     CK_TOKEN_INFO,
@@ -283,3 +285,19 @@ def list_objects(pkcs11, slot_id, pin):
                     print(f'      {name} (TEXT): {text_repr}')
 
     pkcs11.C_CloseSession(session)
+
+
+def generate_key(key_type: str):
+    """Generate key pair of specified type and print it in HEX."""
+
+    if key_type == "secp256k1":
+        sk = SigningKey.generate(curve=SECP256k1)
+        vk = sk.get_verifying_key()
+        print("Закрытый ключ (HEX):", sk.to_string().hex())
+        print("Публичный ключ (HEX):", vk.to_string().hex())
+    elif key_type == "ed25519":
+        sk, vk = create_keypair()
+        print("Закрытый ключ (HEX):", sk.to_seed().hex())
+        print("Публичный ключ (HEX):", vk.to_bytes().hex())
+    else:
+        print("Неизвестный тип ключа:", key_type)
