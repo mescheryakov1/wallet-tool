@@ -21,12 +21,23 @@ def make_pkcs11_mock(captured):
     def generate_key_pair(session, mech_ptr, pub_tpl, pub_count, priv_tpl, priv_count, pub_h_ptr, priv_h_ptr):
         mech = ctypes.cast(mech_ptr, ctypes.POINTER(structs.CK_MECHANISM)).contents
         captured['mechanism'] = mech.mechanism
-        arr_type = structs.CK_ATTRIBUTE * pub_count
-        arr = ctypes.cast(pub_tpl, ctypes.POINTER(arr_type)).contents
-        for attr in arr:
-            if attr.type == structs.CKA_MODULUS_BITS:
-                val = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong)).contents.value
-                captured['modulus_bits'] = val
+
+        def read_attrs(ptr, count, prefix):
+            arr_type = structs.CK_ATTRIBUTE * count
+            arr = ctypes.cast(ptr, ctypes.POINTER(arr_type)).contents
+            for attr in arr:
+                if attr.type == structs.CKA_MODULUS_BITS:
+                    val = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong)).contents.value
+                    captured['modulus_bits'] = val
+                elif attr.type in (structs.CKA_TOKEN, structs.CKA_PRIVATE):
+                    val = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ubyte)).contents.value
+                    captured[f'{prefix}_{attr.type}'] = val
+                elif attr.type in (structs.CKA_ID, structs.CKA_LABEL):
+                    buf = (ctypes.c_char * attr.ulValueLen).from_address(attr.pValue)
+                    captured[f'{prefix}_{attr.type}'] = bytes(buf)
+
+        read_attrs(pub_tpl, pub_count, 'pub')
+        read_attrs(priv_tpl, priv_count, 'priv')
         return 0
     pkcs11_mock.C_GenerateKeyPair = generate_key_pair
 
@@ -45,17 +56,39 @@ def test_generate_rsa2048(monkeypatch):
     captured = {}
     setup(monkeypatch, captured)
 
-    commands.generate_key_pair(slot_id=1, pin='1111', algorithm='rsa2048')
+    commands.generate_key_pair(
+        slot_id=1,
+        pin='1111',
+        algorithm='rsa2048',
+        cka_id='01',
+        cka_label='lbl',
+    )
 
     assert captured['mechanism'] == structs.CKM_RSA_PKCS_KEY_PAIR_GEN
     assert captured['modulus_bits'] == 2048
+    assert captured['pub_%d' % structs.CKA_TOKEN] == 1
+    assert captured['priv_%d' % structs.CKA_PRIVATE] == 1
+    assert captured['pub_%d' % structs.CKA_PRIVATE] == 0
+    assert captured['pub_%d' % structs.CKA_ID] == b'01'
+    assert captured['priv_%d' % structs.CKA_ID] == b'01'
+    assert captured['pub_%d' % structs.CKA_LABEL] == b'lbl'
+    assert captured['priv_%d' % structs.CKA_LABEL] == b'lbl'
 
 
 def test_generate_ed25519(monkeypatch):
     captured = {}
     setup(monkeypatch, captured)
 
-    commands.generate_key_pair(slot_id=1, pin='1111', algorithm='ed25519')
+    commands.generate_key_pair(
+        slot_id=1,
+        pin='1111',
+        algorithm='ed25519',
+        cka_id='AA',
+        cka_label='x',
+    )
 
     assert captured['mechanism'] == structs.CKM_EC_EDWARDS_KEY_PAIR_GEN
+    assert captured['pub_%d' % structs.CKA_ID] == b'AA'
+    assert captured['priv_%d' % structs.CKA_LABEL] == b'x'
+
 
