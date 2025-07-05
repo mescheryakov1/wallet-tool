@@ -33,6 +33,10 @@ def main():
                         help='Показать список объектов в кошельке')
     parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
                         help='Сгенерировать ключевую пару указанного типа')
+    parser.add_argument('--key-id', type=str, default='',
+                        help='CKA_ID для создаваемой ключевой пары')
+    parser.add_argument('--key-label', type=str, default='',
+                        help='CKA_LABEL для создаваемой ключевой пары')
     parser.add_argument('--delete-key', type=int,
                         help='Удалить ключевую пару по номеру')
     parser.add_argument('--slot-id', type=int, default=0,
@@ -53,7 +57,13 @@ def main():
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
     elif args.generate_key:
-        generate_key_pair(args.slot_id, args.pin, args.generate_key)
+        generate_key_pair(
+            args.slot_id,
+            args.pin,
+            args.generate_key,
+            cka_id=args.key_id,
+            cka_label=args.key_label,
+        )
     elif args.delete_key is not None:
         delete_key_pair(args.slot_id, args.pin, args.delete_key)
     else:

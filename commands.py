@@ -306,8 +306,16 @@ def list_objects(pkcs11, slot_id, pin):
 
 
 @pkcs11_command
-def generate_key_pair(pkcs11, slot_id, pin, algorithm):
-    """Generate key pair on token."""
+def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
+    """Generate key pair on token.
+
+    Parameters
+    ----------
+    cka_id: str
+        Value for the ``CKA_ID`` attribute.
+    cka_label: str
+        Value for the ``CKA_LABEL`` attribute.
+    """
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
@@ -331,11 +339,77 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm):
         return
 
     mechanism = CK_MECHANISM(mechanism=0, pParameter=None, ulParameterLen=0)
-    pub_attrs = []
-    priv_attrs = [
-        CK_ATTRIBUTE(type=CKA_TOKEN, pValue=None, ulValueLen=0),
-        CK_ATTRIBUTE(type=CKA_PRIVATE, pValue=None, ulValueLen=0),
+
+    true_val = ctypes.c_ubyte(1)
+    false_val = ctypes.c_ubyte(0)
+
+    pub_attrs = [
+        CK_ATTRIBUTE(
+            type=CKA_TOKEN,
+            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+            ulValueLen=1,
+        ),
+        CK_ATTRIBUTE(
+            type=CKA_PRIVATE,
+            pValue=ctypes.cast(ctypes.pointer(false_val), ctypes.c_void_p),
+            ulValueLen=1,
+        ),
     ]
+
+    priv_attrs = [
+        CK_ATTRIBUTE(
+            type=CKA_TOKEN,
+            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+            ulValueLen=1,
+        ),
+        CK_ATTRIBUTE(
+            type=CKA_PRIVATE,
+            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+            ulValueLen=1,
+        ),
+    ]
+
+    buffers = []
+
+    if cka_id:
+        id_bytes = cka_id.encode("utf-8")
+        id_buf_pub = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
+        id_buf_priv = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
+        buffers.extend([id_buf_pub, id_buf_priv])
+        pub_attrs.append(
+            CK_ATTRIBUTE(
+                type=CKA_ID,
+                pValue=ctypes.cast(id_buf_pub, ctypes.c_void_p),
+                ulValueLen=len(id_bytes),
+            )
+        )
+        priv_attrs.append(
+            CK_ATTRIBUTE(
+                type=CKA_ID,
+                pValue=ctypes.cast(id_buf_priv, ctypes.c_void_p),
+                ulValueLen=len(id_bytes),
+            )
+        )
+
+    if cka_label:
+        label_bytes = cka_label.encode("utf-8")
+        label_buf_pub = (ctypes.c_char * len(label_bytes)).from_buffer_copy(label_bytes)
+        label_buf_priv = (ctypes.c_char * len(label_bytes)).from_buffer_copy(label_bytes)
+        buffers.extend([label_buf_pub, label_buf_priv])
+        pub_attrs.append(
+            CK_ATTRIBUTE(
+                type=CKA_LABEL,
+                pValue=ctypes.cast(label_buf_pub, ctypes.c_void_p),
+                ulValueLen=len(label_bytes),
+            )
+        )
+        priv_attrs.append(
+            CK_ATTRIBUTE(
+                type=CKA_LABEL,
+                pValue=ctypes.cast(label_buf_priv, ctypes.c_void_p),
+                ulValueLen=len(label_bytes),
+            )
+        )
 
     if algorithm == 'rsa1024' or algorithm == 'rsa2048':
         mechanism.mechanism = CKM_RSA_PKCS_KEY_PAIR_GEN
