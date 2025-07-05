@@ -80,9 +80,11 @@ def test_delete_pair_with_private(monkeypatch):
     assert set(destroyed) == {10, 11}
 
 
-def test_delete_pair_only_public(monkeypatch):
+def test_delete_pair_requires_pin(monkeypatch, capsys):
     destroyed = setup_mock(monkeypatch, False)
 
     commands.delete_key_pair(slot_id=1, pin=None, number=1)
 
-    assert destroyed == [10]
+    err = capsys.readouterr().err
+    assert 'PIN-код' in err
+    assert destroyed == []
