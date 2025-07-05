@@ -217,3 +217,54 @@ def test_list_objects_prints_key_type(monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "RSA" in out
+
+
+def test_list_objects_prints_ec_key_type(monkeypatch, capsys):
+    """Simulate object with EC key type and expect ECDSA description."""
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+    pkcs11_mock.C_FindObjectsInit = lambda *args: 0
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if not hasattr(find_objects, "done"):
+            obj_ptr._obj.value = 55
+            count_ptr._obj.value = 1
+            find_objects.done = True
+        else:
+            count_ptr._obj.value = 0
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        if not attr.pValue:
+            if attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            else:
+                attr.ulValueLen = 0
+            return 0
+        if attr.type == structs.CKA_KEY_TYPE:
+            val = ctypes.c_ulong(structs.CKK_EC)
+            ctypes.memmove(attr.pValue, ctypes.byref(val), ctypes.sizeof(val))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_objects(slot_id=1, pin=None)
+
+    out = capsys.readouterr().out
+    assert "ECDSA" in out
+    assert "bitcoin" in out
