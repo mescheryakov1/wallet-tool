@@ -173,6 +173,12 @@ def test_format_attribute_value_hex_truncate():
     assert out.endswith("...")
 
 
+def test_format_attribute_value_text_truncate():
+    data = b"a" * 40
+    out = commands.format_attribute_value(data, "text")
+    assert out == "a" * 30 + "..."
+
+
 def test_list_objects_prints_key_type(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
 
