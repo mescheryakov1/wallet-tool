@@ -214,7 +214,7 @@ def list_objects(pkcs11, slot_id, pin):
         attr.ulValueLen = ctypes.sizeof(class_val)
         template = (CK_ATTRIBUTE * 1)(attr)
 
-        rv = pkcs11.C_FindObjectsInit(session.value, template, 1)
+        rv = pkcs11.C_FindObjectsInit(session, template, 1)
         if rv != 0:
             print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
             return []
@@ -534,7 +534,7 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
                             pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
                             ulValueLen=ctypes.sizeof(class_val))
         template = (CK_ATTRIBUTE * 1)(attr)
-        rv = pkcs11.C_FindObjectsInit(session.value, template, 1)
+        rv = pkcs11.C_FindObjectsInit(session, template, 1)
         if rv != 0:
             return []
 
