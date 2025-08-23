@@ -66,3 +66,7 @@ def define_pkcs11_functions(pkcs11):
         ctypes.c_ulong,  # CK_OBJECT_HANDLE
     ]
     pkcs11.C_DestroyObject.restype = ctypes.c_ulong
+
+    # C_CloseSession
+    pkcs11.C_CloseSession.argtypes = [ctypes.c_ulong]
+    pkcs11.C_CloseSession.restype = ctypes.c_ulong
