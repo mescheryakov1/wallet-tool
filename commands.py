@@ -187,7 +187,13 @@ def list_objects(pkcs11, slot_id, pin):
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
-    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    rv = pkcs11.C_OpenSession(
+        slot_id,
+        CKF_SERIAL_SESSION | CKF_RW_SESSION,
+        None,
+        None,
+        ctypes.byref(session),
+    )
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
         return
@@ -196,115 +202,127 @@ def list_objects(pkcs11, slot_id, pin):
         return
 
     logged_in = False
-    if pin:
-        rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
-        if rv != 0:
-            print(f'C_Login вернула ошибку: 0x{rv:08X}')
-            pkcs11.C_CloseSession(session)
-            return
-        logged_in = True
-    else:
-        print('Закрытые ключи не отображаются без ввода PIN-кода')
+    try:
+        if pin:
+            rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
+            if rv != 0:
+                print(f'C_Login вернула ошибку: 0x{rv:08X}')
+                return
+            logged_in = True
+        else:
+            print('Закрытые ключи не отображаются без ввода PIN-кода')
 
-    def search_objects(obj_class):
-        class_val = ctypes.c_ulong(obj_class)
-        attr = CK_ATTRIBUTE()
-        attr.type = CKA_CLASS
-        attr.pValue = ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p)
-        attr.ulValueLen = ctypes.sizeof(class_val)
-        template = (CK_ATTRIBUTE * 1)(attr)
+        def search_objects(obj_class):
+            class_val = ctypes.c_ulong(obj_class)
+            attr = CK_ATTRIBUTE()
+            attr.type = CKA_CLASS
+            attr.pValue = ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p)
+            attr.ulValueLen = ctypes.sizeof(class_val)
+            template = (CK_ATTRIBUTE * 1)(attr)
 
-        rv = pkcs11.C_FindObjectsInit(session, template, 1)
-        if rv != 0:
-            print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
-            return []
+            rv = pkcs11.C_FindObjectsInit(session, template, 1)
+            if rv != 0:
+                print(f'C_FindObjectsInit вернула ошибку: 0x{rv:08X}')
+                return []
 
-        handles = []
-        obj = ctypes.c_ulong()
-        count = ctypes.c_ulong()
-        while True:
-            rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
-            if rv != 0 or count.value == 0:
-                break
-            handles.append(obj.value)
-        pkcs11.C_FindObjectsFinal(session)
-        return handles
+            handles = []
+            obj = ctypes.c_ulong()
+            count = ctypes.c_ulong()
+            while True:
+                rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
+                if rv != 0 or count.value == 0:
+                    break
+                handles.append(obj.value)
+            pkcs11.C_FindObjectsFinal(session)
+            return handles
 
-    def get_attributes(handle):
-        attrs = {}
-        for attr_type, attr_name in [
-            (CKA_LABEL, 'CKA_LABEL'),
-            (CKA_ID, 'CKA_ID'),
-            (CKA_VALUE, 'CKA_VALUE'),
-            (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
-        ]:
-            attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
-            rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
-            if rv != 0 or attr_template.ulValueLen == 0:
-                continue
-            buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
-            attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
-            rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1)
-            if rv == 0:
-                if attr_type == CKA_KEY_TYPE:
-                    attrs[attr_name] = int.from_bytes(bytes(buf), sys.byteorder)
-                else:
-                    attrs[attr_name] = bytes(buf)
-        return attrs
+        def get_attributes(handle):
+            attrs = {}
+            for attr_type, attr_name in [
+                (CKA_LABEL, 'CKA_LABEL'),
+                (CKA_ID, 'CKA_ID'),
+                (CKA_VALUE, 'CKA_VALUE'),
+                (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
+            ]:
+                attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
+                rv = pkcs11.C_GetAttributeValue(
+                    session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1
+                )
+                if rv != 0 or attr_template.ulValueLen == 0:
+                    continue
+                buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
+                attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
+                rv = pkcs11.C_GetAttributeValue(
+                    session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1
+                )
+                if rv == 0:
+                    if attr_type == CKA_KEY_TYPE:
+                        attrs[attr_name] = int.from_bytes(bytes(buf), sys.byteorder)
+                    else:
+                        attrs[attr_name] = bytes(buf)
+            return attrs
 
-    objects = {}
-    for h in search_objects(CKO_PUBLIC_KEY):
-        attrs = get_attributes(h)
-        objects.setdefault(attrs.get('CKA_ID'), {})['public'] = (h, attrs)
-
-    if logged_in:
-        for h in search_objects(CKO_PRIVATE_KEY):
+        objects = {}
+        for h in search_objects(CKO_PUBLIC_KEY):
             attrs = get_attributes(h)
-            objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
+            objects.setdefault(attrs.get('CKA_ID'), {})['public'] = (h, attrs)
 
-    # If both public and private parts are found, copy label from private to
-    # public key when the latter lacks one.
-    for pair in objects.values():
-        if 'public' in pair and 'private' in pair:
-            pub_attrs = pair['public'][1]
-            priv_attrs = pair['private'][1]
-            if 'CKA_LABEL' not in pub_attrs and 'CKA_LABEL' in priv_attrs:
-                pub_attrs['CKA_LABEL'] = priv_attrs['CKA_LABEL']
+        if logged_in:
+            for h in search_objects(CKO_PRIVATE_KEY):
+                attrs = get_attributes(h)
+                objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
 
-    print('Список ключей в кошельке:')
-    for idx, key_id in enumerate(sorted(objects.keys(), key=lambda x: x or b''), start=1):
-        pair = objects[key_id]
-        key_type = None
-        if 'public' in pair and 'CKA_KEY_TYPE' in pair['public'][1]:
-            key_type = pair['public'][1]['CKA_KEY_TYPE']
-        elif 'private' in pair and 'CKA_KEY_TYPE' in pair['private'][1]:
-            key_type = pair['private'][1]['CKA_KEY_TYPE']
-        suffix = f" ({key_type_description.get(key_type)})" if key_type in key_type_description else ''
-        print(f'  Ключ \N{numero sign}{idx}{suffix}:')
-        if 'public' in pair:
-            h, attrs = pair['public']
-            print('    Публичный ключ')
-            for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
-                raw = attrs.get(name)
-                if raw is None and name == 'CKA_LABEL' and 'private' in pair:
-                    raw = pair['private'][1].get(name)
-                if raw is not None:
-                    hex_repr = format_attribute_value(raw, "hex")
-                    text_repr = format_attribute_value(raw, "text")
-                    print(f'      {name} (HEX): {hex_repr}')
-                    print(f'      {name} (TEXT): {text_repr}')
-        if 'private' in pair:
-            h, attrs = pair['private']
-            print('    Закрытый ключ')
-            for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
-                if name in attrs:
-                    raw = attrs[name]
-                    hex_repr = format_attribute_value(raw, "hex")
-                    text_repr = format_attribute_value(raw, "text")
-                    print(f'      {name} (HEX): {hex_repr}')
-                    print(f'      {name} (TEXT): {text_repr}')
+        # If both public and private parts are found, copy label from private to
+        # public key when the latter lacks one.
+        for pair in objects.values():
+            if 'public' in pair and 'private' in pair:
+                pub_attrs = pair['public'][1]
+                priv_attrs = pair['private'][1]
+                if 'CKA_LABEL' not in pub_attrs and 'CKA_LABEL' in priv_attrs:
+                    pub_attrs['CKA_LABEL'] = priv_attrs['CKA_LABEL']
 
-    pkcs11.C_CloseSession(session)
+        print('Список ключей в кошельке:')
+        for idx, key_id in enumerate(
+            sorted(objects.keys(), key=lambda x: x or b''), start=1
+        ):
+            pair = objects[key_id]
+            key_type = None
+            if 'public' in pair and 'CKA_KEY_TYPE' in pair['public'][1]:
+                key_type = pair['public'][1]['CKA_KEY_TYPE']
+            elif 'private' in pair and 'CKA_KEY_TYPE' in pair['private'][1]:
+                key_type = pair['private'][1]['CKA_KEY_TYPE']
+            suffix = (
+                f" ({key_type_description.get(key_type)})"
+                if key_type in key_type_description
+                else ''
+            )
+            print(f'  Ключ \N{numero sign}{idx}{suffix}:')
+            if 'public' in pair:
+                h, attrs = pair['public']
+                print('    Публичный ключ')
+                for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                    raw = attrs.get(name)
+                    if raw is None and name == 'CKA_LABEL' and 'private' in pair:
+                        raw = pair['private'][1].get(name)
+                    if raw is not None:
+                        hex_repr = format_attribute_value(raw, 'hex')
+                        text_repr = format_attribute_value(raw, 'text')
+                        print(f'      {name} (HEX): {hex_repr}')
+                        print(f'      {name} (TEXT): {text_repr}')
+            if 'private' in pair:
+                h, attrs = pair['private']
+                print('    Закрытый ключ')
+                for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                    if name in attrs:
+                        raw = attrs[name]
+                        hex_repr = format_attribute_value(raw, 'hex')
+                        text_repr = format_attribute_value(raw, 'text')
+                        print(f'      {name} (HEX): {hex_repr}')
+                        print(f'      {name} (TEXT): {text_repr}')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
+        pkcs11.C_CloseSession(session)
 
 
 @pkcs11_command
@@ -321,7 +339,9 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
-    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    rv = pkcs11.C_OpenSession(
+        slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
+    )
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
         return
@@ -329,177 +349,208 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
-    if not cka_id or not cka_label:
-        print('Необходимо указать key-id и key-label для генерации ключа', file=sys.stderr)
-        pkcs11.C_CloseSession(session)
-        return
-
-    if not pin:
-        print('Необходимо указать PIN-код для генерации ключа', file=sys.stderr)
-        pkcs11.C_CloseSession(session)
-        return
-
-    rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
-    if rv != 0:
-        print(f'C_Login вернула ошибку: 0x{rv:08X}')
-        pkcs11.C_CloseSession(session)
-        return
-
-    mechanism = CK_MECHANISM(mechanism=0, pParameter=None, ulParameterLen=0)
-
-    true_val = ctypes.c_ubyte(1)
-    false_val = ctypes.c_ubyte(0)
-
-    pub_attrs = [
-        CK_ATTRIBUTE(
-            type=CKA_TOKEN,
-            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
-            ulValueLen=1,
-        ),
-        CK_ATTRIBUTE(
-            type=CKA_PRIVATE,
-            pValue=ctypes.cast(ctypes.pointer(false_val), ctypes.c_void_p),
-            ulValueLen=1,
-        ),
-    ]
-
-    priv_attrs = [
-        CK_ATTRIBUTE(
-            type=CKA_TOKEN,
-            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
-            ulValueLen=1,
-        ),
-        CK_ATTRIBUTE(
-            type=CKA_PRIVATE,
-            pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
-            ulValueLen=1,
-        ),
-    ]
-
-    buffers = []
-
-    if cka_id:
-        id_bytes = cka_id.encode("utf-8")
-        id_buf_pub = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
-        id_buf_priv = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
-        buffers.extend([id_buf_pub, id_buf_priv])
-        pub_attrs.append(
-            CK_ATTRIBUTE(
-                type=CKA_ID,
-                pValue=ctypes.cast(id_buf_pub, ctypes.c_void_p),
-                ulValueLen=len(id_bytes),
+    logged_in = False
+    try:
+        if not cka_id or not cka_label:
+            print(
+                'Необходимо указать key-id и key-label для генерации ключа',
+                file=sys.stderr,
             )
-        )
-        priv_attrs.append(
-            CK_ATTRIBUTE(
-                type=CKA_ID,
-                pValue=ctypes.cast(id_buf_priv, ctypes.c_void_p),
-                ulValueLen=len(id_bytes),
+            return
+
+        if not pin:
+            print(
+                'Необходимо указать PIN-код для генерации ключа',
+                file=sys.stderr,
             )
+            return
+
+        rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
+        if rv != 0:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            return
+        logged_in = True
+
+        mechanism = CK_MECHANISM(mechanism=0, pParameter=None, ulParameterLen=0)
+
+        true_val = ctypes.c_ubyte(1)
+        false_val = ctypes.c_ubyte(0)
+
+        pub_attrs = [
+            CK_ATTRIBUTE(
+                type=CKA_TOKEN,
+                pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_PRIVATE,
+                pValue=ctypes.cast(ctypes.pointer(false_val), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+        ]
+
+        priv_attrs = [
+            CK_ATTRIBUTE(
+                type=CKA_TOKEN,
+                pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_PRIVATE,
+                pValue=ctypes.cast(ctypes.pointer(true_val), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+        ]
+
+        buffers = []
+
+        if cka_id:
+            id_bytes = cka_id.encode('utf-8')
+            id_buf_pub = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
+            id_buf_priv = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
+            buffers.extend([id_buf_pub, id_buf_priv])
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_ID,
+                    pValue=ctypes.cast(id_buf_pub, ctypes.c_void_p),
+                    ulValueLen=len(id_bytes),
+                )
+            )
+            priv_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_ID,
+                    pValue=ctypes.cast(id_buf_priv, ctypes.c_void_p),
+                    ulValueLen=len(id_bytes),
+                )
+            )
+
+        if cka_label:
+            label_bytes = cka_label.encode('utf-8')
+            label_buf_pub = (ctypes.c_char * len(label_bytes)).from_buffer_copy(
+                label_bytes
+            )
+            label_buf_priv = (ctypes.c_char * len(label_bytes)).from_buffer_copy(
+                label_bytes
+            )
+            buffers.extend([label_buf_pub, label_buf_priv])
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_LABEL,
+                    pValue=ctypes.cast(label_buf_pub, ctypes.c_void_p),
+                    ulValueLen=len(label_bytes),
+                )
+            )
+            priv_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_LABEL,
+                    pValue=ctypes.cast(label_buf_priv, ctypes.c_void_p),
+                    ulValueLen=len(label_bytes),
+                )
+            )
+
+        if algorithm == 'rsa1024' or algorithm == 'rsa2048':
+            mechanism.mechanism = CKM_RSA_PKCS_KEY_PAIR_GEN
+            bits = 1024 if algorithm == 'rsa1024' else 2048
+            bits_val = ctypes.c_ulong(bits)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_MODULUS_BITS,
+                    pValue=ctypes.cast(ctypes.pointer(bits_val), ctypes.c_void_p),
+                    ulValueLen=ctypes.sizeof(bits_val),
+                )
+            )
+            exp = (ctypes.c_ubyte * 3)(0x01, 0x00, 0x01)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_PUBLIC_EXPONENT,
+                    pValue=ctypes.cast(exp, ctypes.c_void_p),
+                    ulValueLen=3,
+                )
+            )
+        elif algorithm == 'secp256':
+            mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
+            oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_EC_PARAMS,
+                    pValue=ctypes.cast(oid, ctypes.c_void_p),
+                    ulValueLen=10,
+                )
+            )
+        elif algorithm == 'ed25519':
+            mechanism.mechanism = CKM_EC_EDWARDS_KEY_PAIR_GEN
+            oid = (ctypes.c_ubyte * 5)(0x06, 0x03, 0x2B, 0x65, 0x70)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_EC_PARAMS,
+                    pValue=ctypes.cast(oid, ctypes.c_void_p),
+                    ulValueLen=5,
+                )
+            )
+        elif algorithm == 'gost':
+            mechanism.mechanism = CKM_GOSTR3410_KEY_PAIR_GEN
+            oid = (
+                ctypes.c_ubyte * 11
+            )(0x06, 0x09, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x01)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_GOSTR3410_PARAMS,
+                    pValue=ctypes.cast(oid, ctypes.c_void_p),
+                    ulValueLen=11,
+                )
+            )
+            hash_oid = (
+                ctypes.c_ubyte * 10
+            )(0x06, 0x08, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x02, 0x01)
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_GOSTR3411_PARAMS,
+                    pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
+                    ulValueLen=10,
+                )
+            )
+            priv_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_GOSTR3411_PARAMS,
+                    pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
+                    ulValueLen=10,
+                )
+            )
+            priv_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_GOSTR3410_PARAMS,
+                    pValue=ctypes.cast(oid, ctypes.c_void_p),
+                    ulValueLen=11,
+                )
+            )
+        else:
+            print('Неверный тип ключа')
+            return
+
+        pub_template = (CK_ATTRIBUTE * len(pub_attrs))(*pub_attrs)
+        priv_template = (CK_ATTRIBUTE * len(priv_attrs))(*priv_attrs)
+        pub_handle = ctypes.c_ulong()
+        priv_handle = ctypes.c_ulong()
+
+        rv = pkcs11.C_GenerateKeyPair(
+            session,
+            ctypes.byref(mechanism),
+            pub_template,
+            len(pub_attrs),
+            priv_template,
+            len(priv_attrs),
+            ctypes.byref(pub_handle),
+            ctypes.byref(priv_handle),
         )
 
-    if cka_label:
-        label_bytes = cka_label.encode("utf-8")
-        label_buf_pub = (ctypes.c_char * len(label_bytes)).from_buffer_copy(label_bytes)
-        label_buf_priv = (ctypes.c_char * len(label_bytes)).from_buffer_copy(label_bytes)
-        buffers.extend([label_buf_pub, label_buf_priv])
-        pub_attrs.append(
-            CK_ATTRIBUTE(
-                type=CKA_LABEL,
-                pValue=ctypes.cast(label_buf_pub, ctypes.c_void_p),
-                ulValueLen=len(label_bytes),
-            )
-        )
-        priv_attrs.append(
-            CK_ATTRIBUTE(
-                type=CKA_LABEL,
-                pValue=ctypes.cast(label_buf_priv, ctypes.c_void_p),
-                ulValueLen=len(label_bytes),
-            )
-        )
-
-    if algorithm == 'rsa1024' or algorithm == 'rsa2048':
-        mechanism.mechanism = CKM_RSA_PKCS_KEY_PAIR_GEN
-        bits = 1024 if algorithm == 'rsa1024' else 2048
-        bits_val = ctypes.c_ulong(bits)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_MODULUS_BITS,
-            pValue=ctypes.cast(ctypes.pointer(bits_val), ctypes.c_void_p),
-            ulValueLen=ctypes.sizeof(bits_val),
-        ))
-        exp = (ctypes.c_ubyte * 3)(0x01, 0x00, 0x01)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_PUBLIC_EXPONENT,
-            pValue=ctypes.cast(exp, ctypes.c_void_p),
-            ulValueLen=3,
-        ))
-    elif algorithm == 'secp256':
-        mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
-        oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_EC_PARAMS,
-            pValue=ctypes.cast(oid, ctypes.c_void_p),
-            ulValueLen=10,
-        ))
-    elif algorithm == 'ed25519':
-        mechanism.mechanism = CKM_EC_EDWARDS_KEY_PAIR_GEN
-        oid = (ctypes.c_ubyte * 5)(0x06, 0x03, 0x2B, 0x65, 0x70)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_EC_PARAMS,
-            pValue=ctypes.cast(oid, ctypes.c_void_p),
-            ulValueLen=5,
-        ))
-    elif algorithm == 'gost':
-        mechanism.mechanism = CKM_GOSTR3410_KEY_PAIR_GEN
-        oid = (ctypes.c_ubyte * 11)(0x06, 0x09, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x01, 0x01, 0x01)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_GOSTR3410_PARAMS,
-            pValue=ctypes.cast(oid, ctypes.c_void_p),
-            ulValueLen=11,
-        ))
-        hash_oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x85, 0x03, 0x07, 0x01, 0x02, 0x02, 0x01)
-        pub_attrs.append(CK_ATTRIBUTE(
-            type=CKA_GOSTR3411_PARAMS,
-            pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
-            ulValueLen=10,
-        ))
-        priv_attrs.append(CK_ATTRIBUTE(
-            type=CKA_GOSTR3411_PARAMS,
-            pValue=ctypes.cast(hash_oid, ctypes.c_void_p),
-            ulValueLen=10,
-        ))
-        priv_attrs.append(CK_ATTRIBUTE(
-            type=CKA_GOSTR3410_PARAMS,
-            pValue=ctypes.cast(oid, ctypes.c_void_p),
-            ulValueLen=11,
-        ))
-    else:
-        print('Неверный тип ключа')
+        if rv != 0:
+            print(f'C_GenerateKeyPair вернула ошибку: 0x{rv:08X}')
+        else:
+            print('Ключевая пара успешно сгенерирована.')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
         pkcs11.C_CloseSession(session)
-        return
-
-    pub_template = (CK_ATTRIBUTE * len(pub_attrs))(*pub_attrs)
-    priv_template = (CK_ATTRIBUTE * len(priv_attrs))(*priv_attrs)
-    pub_handle = ctypes.c_ulong()
-    priv_handle = ctypes.c_ulong()
-
-    rv = pkcs11.C_GenerateKeyPair(
-        session,
-        ctypes.byref(mechanism),
-        pub_template,
-        len(pub_attrs),
-        priv_template,
-        len(priv_attrs),
-        ctypes.byref(pub_handle),
-        ctypes.byref(priv_handle),
-    )
-
-    if rv != 0:
-        print(f'C_GenerateKeyPair вернула ошибку: 0x{rv:08X}')
-    else:
-        print('Ключевая пара успешно сгенерирована.')
-
-    pkcs11.C_CloseSession(session)
 
 
 @pkcs11_command
@@ -508,7 +559,9 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
-    rv = pkcs11.C_OpenSession(slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session))
+    rv = pkcs11.C_OpenSession(
+        slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
+    )
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
         return
@@ -516,75 +569,82 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
-    if not pin:
-        print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
-        pkcs11.C_CloseSession(session)
-        return
+    logged_in = False
+    try:
+        if not pin:
+            print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
+            return
 
-    rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
-    if rv != 0:
-        print(f'C_Login вернула ошибку: 0x{rv:08X}')
-        pkcs11.C_CloseSession(session)
-        return
-    logged_in = True
-
-    def search_objects(obj_class):
-        class_val = ctypes.c_ulong(obj_class)
-        attr = CK_ATTRIBUTE(type=CKA_CLASS,
-                            pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
-                            ulValueLen=ctypes.sizeof(class_val))
-        template = (CK_ATTRIBUTE * 1)(attr)
-        rv = pkcs11.C_FindObjectsInit(session, template, 1)
+        rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
         if rv != 0:
-            return []
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            return
+        logged_in = True
 
-        handles = []
-        obj = ctypes.c_ulong()
-        count = ctypes.c_ulong()
-        while True:
-            rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
-            if rv != 0 or count.value == 0:
-                break
-            handles.append(obj.value)
-        pkcs11.C_FindObjectsFinal(session)
-        return handles
+        def search_objects(obj_class):
+            class_val = ctypes.c_ulong(obj_class)
+            attr = CK_ATTRIBUTE(
+                type=CKA_CLASS,
+                pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
+                ulValueLen=ctypes.sizeof(class_val),
+            )
+            template = (CK_ATTRIBUTE * 1)(attr)
+            rv = pkcs11.C_FindObjectsInit(session, template, 1)
+            if rv != 0:
+                return []
 
-    def get_id(handle):
-        attr = CK_ATTRIBUTE(type=CKA_ID, pValue=None, ulValueLen=0)
-        rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr), 1)
-        if rv != 0 or attr.ulValueLen == 0:
-            return None
-        buf = (ctypes.c_ubyte * attr.ulValueLen)()
-        attr.pValue = ctypes.cast(buf, ctypes.c_void_p)
-        rv = pkcs11.C_GetAttributeValue(session, ctypes.c_ulong(handle), ctypes.byref(attr), 1)
-        if rv != 0:
-            return None
-        return bytes(buf)
+            handles = []
+            obj = ctypes.c_ulong()
+            count = ctypes.c_ulong()
+            while True:
+                rv = pkcs11.C_FindObjects(session, ctypes.byref(obj), 1, ctypes.byref(count))
+                if rv != 0 or count.value == 0:
+                    break
+                handles.append(obj.value)
+            pkcs11.C_FindObjectsFinal(session)
+            return handles
 
-    objects = {}
-    for h in search_objects(CKO_PUBLIC_KEY):
-        key_id = get_id(h)
-        objects.setdefault(key_id, {})['public'] = h
+        def get_id(handle):
+            attr = CK_ATTRIBUTE(type=CKA_ID, pValue=None, ulValueLen=0)
+            rv = pkcs11.C_GetAttributeValue(
+                session, ctypes.c_ulong(handle), ctypes.byref(attr), 1
+            )
+            if rv != 0 or attr.ulValueLen == 0:
+                return None
+            buf = (ctypes.c_ubyte * attr.ulValueLen)()
+            attr.pValue = ctypes.cast(buf, ctypes.c_void_p)
+            rv = pkcs11.C_GetAttributeValue(
+                session, ctypes.c_ulong(handle), ctypes.byref(attr), 1
+            )
+            if rv != 0:
+                return None
+            return bytes(buf)
 
-    if logged_in:
-        for h in search_objects(CKO_PRIVATE_KEY):
+        objects = {}
+        for h in search_objects(CKO_PUBLIC_KEY):
             key_id = get_id(h)
-            objects.setdefault(key_id, {})['private'] = h
+            objects.setdefault(key_id, {})['public'] = h
 
-    ids = sorted(objects.keys(), key=lambda x: x or b'')
-    if number < 1 or number > len(ids):
-        print('Ключ с таким номером не найден')
+        if logged_in:
+            for h in search_objects(CKO_PRIVATE_KEY):
+                key_id = get_id(h)
+                objects.setdefault(key_id, {})['private'] = h
+
+        ids = sorted(objects.keys(), key=lambda x: x or b'')
+        if number < 1 or number > len(ids):
+            print('Ключ с таким номером не найден')
+            return
+
+        pair = objects[ids[number - 1]]
+        if 'public' in pair:
+            rv = pkcs11.C_DestroyObject(session, pair['public'])
+            if rv != 0:
+                print(f'Ошибка удаления публичного ключа: 0x{rv:08X}')
+        if 'private' in pair:
+            rv = pkcs11.C_DestroyObject(session, pair['private'])
+            if rv != 0:
+                print(f'Ошибка удаления закрытого ключа: 0x{rv:08X}')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
         pkcs11.C_CloseSession(session)
-        return
-
-    pair = objects[ids[number - 1]]
-    if 'public' in pair:
-        rv = pkcs11.C_DestroyObject(session, pair['public'])
-        if rv != 0:
-            print(f'Ошибка удаления публичного ключа: 0x{rv:08X}')
-    if 'private' in pair:
-        rv = pkcs11.C_DestroyObject(session, pair['private'])
-        if rv != 0:
-            print(f'Ошибка удаления закрытого ключа: 0x{rv:08X}')
-
-    pkcs11.C_CloseSession(session)

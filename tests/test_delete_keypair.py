@@ -21,6 +21,8 @@ def setup_mock(monkeypatch, with_private):
     pkcs11_mock.C_Login = login
     pkcs11_mock.C_FindObjectsFinal = lambda session: 0
     pkcs11_mock.C_CloseSession = lambda session: 0
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     current_class = None
 
@@ -73,20 +75,21 @@ def setup_mock(monkeypatch, with_private):
     monkeypatch.setattr(pkcs11, 'finalize_library', lambda x: None)
     monkeypatch.setattr(commands, 'define_pkcs11_functions', lambda x: None)
 
-    return destroyed, login_args
+    return destroyed, login_args, logout_called
 
 
 def test_delete_pair_with_private(monkeypatch):
-    destroyed, login_args = setup_mock(monkeypatch, True)
+    destroyed, login_args, logout_called = setup_mock(monkeypatch, True)
 
     commands.delete_key_pair(slot_id=1, pin='0000', number=1)
 
     assert set(destroyed) == {10, 11}
     assert login_args[0][1] == structs.CKU_USER
+    assert logout_called == [True]
 
 
 def test_delete_pair_requires_pin(monkeypatch, capsys):
-    destroyed, login_args = setup_mock(monkeypatch, False)
+    destroyed, login_args, logout_called = setup_mock(monkeypatch, False)
 
     commands.delete_key_pair(slot_id=1, pin=None, number=1)
 
@@ -94,3 +97,4 @@ def test_delete_pair_requires_pin(monkeypatch, capsys):
     assert 'PIN-код' in err
     assert destroyed == []
     assert login_args == []
+    assert logout_called == []
