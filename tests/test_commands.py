@@ -41,6 +41,8 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
     pkcs11_mock.C_FindObjectsFinal = lambda session: 0
     pkcs11_mock.C_CloseSession = lambda session: 0
     pkcs11_mock.C_GetAttributeValue = lambda *args: 0
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
     monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
@@ -53,6 +55,7 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
     assert "Закрытые ключи не отображаются" in out
     assert login_args == []
     assert captured == [structs.CKO_PUBLIC_KEY]
+    assert logout_called == []
 
 
 def test_list_objects_with_pin_search_templates(monkeypatch):
@@ -66,6 +69,8 @@ def test_list_objects_with_pin_search_templates(monkeypatch):
     pkcs11_mock.C_FindObjectsFinal = lambda session: 0
     pkcs11_mock.C_CloseSession = lambda session: 0
     pkcs11_mock.C_GetAttributeValue = lambda *args: 0
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     calls = []
     def find_objects_init(session_handle, template_ptr, count):
@@ -98,6 +103,7 @@ def test_list_objects_with_pin_search_templates(monkeypatch):
     assert len(login_args) == 1
     assert login_args[0][1] == structs.CKU_USER
     assert set(calls) == {structs.CKO_PUBLIC_KEY, structs.CKO_PRIVATE_KEY}
+    assert logout_called == [True]
 
 
 def test_list_wallets_no_wallet(monkeypatch, capsys):
@@ -193,6 +199,8 @@ def test_list_objects_prints_key_type(monkeypatch, capsys):
     pkcs11_mock.C_FindObjects = find_objects
     pkcs11_mock.C_FindObjectsFinal = lambda session: 0
     pkcs11_mock.C_CloseSession = lambda session: 0
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     def get_attribute_value(session, obj, attr_ptr, count):
         attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
@@ -310,6 +318,8 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     pkcs11_mock.C_FindObjects = find_objects
     pkcs11_mock.C_FindObjectsFinal = lambda session: 0
     pkcs11_mock.C_CloseSession = lambda session: 0
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     LABEL = b"my label"
 
@@ -349,3 +359,4 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     pub_index = out.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")
     assert any("CKA_LABEL" in line for line in out[pub_index:pub_index + 5])
     assert login_args[0][1] == structs.CKU_USER
+    assert logout_called == [True]

@@ -16,10 +16,15 @@ def make_pkcs11_mock(captured):
         return 0
     pkcs11_mock.C_OpenSession = open_session
     captured['login_args'] = []
+    captured['logout_called'] = 0
     def login(*args, **kwargs):
         captured['login_args'].append(args)
         return 0
     pkcs11_mock.C_Login = login
+    def logout(session):
+        captured['logout_called'] += 1
+        return 0
+    pkcs11_mock.C_Logout = logout
     pkcs11_mock.C_CloseSession = lambda session: 0
 
     def generate_key_pair(session, mech_ptr, pub_tpl, pub_count, priv_tpl, priv_count, pub_h_ptr, priv_h_ptr):
@@ -80,6 +85,7 @@ def test_generate_rsa2048(monkeypatch):
     assert captured['pub_%d' % structs.CKA_LABEL] == b'lbl'
     assert captured['login_args'][0][1] == structs.CKU_USER
     assert captured['priv_%d' % structs.CKA_LABEL] == b'lbl'
+    assert captured['logout_called'] == 1
 
 
 def test_generate_ed25519(monkeypatch):
@@ -98,6 +104,7 @@ def test_generate_ed25519(monkeypatch):
     assert captured['pub_%d' % structs.CKA_ID] == b'AA'
     assert captured['priv_%d' % structs.CKA_LABEL] == b'x'
     assert captured['login_args'][0][1] == structs.CKU_USER
+    assert captured['logout_called'] == 1
 
 
 def test_generate_missing_id_label(monkeypatch, capsys):
@@ -115,6 +122,7 @@ def test_generate_missing_id_label(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert 'key-id' in err and 'key-label' in err
     assert captured['login_args'] == []
+    assert captured['logout_called'] == 0
 
 
 def test_generate_gost_params(monkeypatch):
@@ -135,5 +143,6 @@ def test_generate_gost_params(monkeypatch):
     assert 'priv_%d' % structs.CKA_GOSTR3410_PARAMS in captured
     assert 'priv_%d' % structs.CKA_GOSTR3411_PARAMS in captured
     assert captured['login_args'][0][1] == structs.CKU_USER
+    assert captured['logout_called'] == 1
 
 
