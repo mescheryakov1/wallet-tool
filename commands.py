@@ -32,6 +32,7 @@ from pkcs11_structs import (
     CKM_EC_EDWARDS_KEY_PAIR_GEN,
     CKM_GOSTR3410_KEY_PAIR_GEN,
     CK_MECHANISM,
+    CKU_USER,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -196,7 +197,7 @@ def list_objects(pkcs11, slot_id, pin):
 
     logged_in = False
     if pin:
-        rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+        rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
         if rv != 0:
             print(f'C_Login вернула ошибку: 0x{rv:08X}')
             pkcs11.C_CloseSession(session)
@@ -338,7 +339,7 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
         pkcs11.C_CloseSession(session)
         return
 
-    rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+    rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
     if rv != 0:
         print(f'C_Login вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)
@@ -520,7 +521,7 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
         pkcs11.C_CloseSession(session)
         return
 
-    rv = pkcs11.C_Login(session, 1, pin.encode('utf-8'), len(pin))
+    rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
     if rv != 0:
         print(f'C_Login вернула ошибку: 0x{rv:08X}')
         pkcs11.C_CloseSession(session)

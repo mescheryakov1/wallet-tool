@@ -16,9 +16,9 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
         return 0
     pkcs11_mock.C_OpenSession = open_session
 
-    login_called = []
+    login_args = []
     def login(*args):
-        login_called.append(True)
+        login_args.append(args)
         return 0
     pkcs11_mock.C_Login = login
 
@@ -51,7 +51,7 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "Закрытые ключи не отображаются" in out
-    assert login_called == []
+    assert login_args == []
     assert captured == [structs.CKO_PUBLIC_KEY]
 
 
@@ -82,9 +82,9 @@ def test_list_objects_with_pin_search_templates(monkeypatch):
         return 0
     pkcs11_mock.C_FindObjects = find_objects
 
-    login_called = []
+    login_args = []
     def login(*args):
-        login_called.append(True)
+        login_args.append(args)
         return 0
     pkcs11_mock.C_Login = login
 
@@ -95,7 +95,8 @@ def test_list_objects_with_pin_search_templates(monkeypatch):
 
     commands.list_objects(slot_id=1, pin="0000")
 
-    assert len(login_called) == 1
+    assert len(login_args) == 1
+    assert login_args[0][1] == structs.CKU_USER
     assert set(calls) == {structs.CKO_PUBLIC_KEY, structs.CKO_PRIVATE_KEY}
 
 
@@ -331,7 +332,11 @@ def test_public_key_label_from_private(monkeypatch, capsys):
         return 0
 
     pkcs11_mock.C_GetAttributeValue = get_attribute_value
-    pkcs11_mock.C_Login = lambda *args, **kwargs: 0
+    login_args = []
+    def login(*args, **kwargs):
+        login_args.append(args)
+        return 0
+    pkcs11_mock.C_Login = login
 
     monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
     monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
@@ -343,3 +348,4 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     out = capsys.readouterr().out.splitlines()
     pub_index = out.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")
     assert any("CKA_LABEL" in line for line in out[pub_index:pub_index + 5])
+    assert login_args[0][1] == structs.CKU_USER
