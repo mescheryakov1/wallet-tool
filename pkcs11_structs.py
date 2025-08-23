@@ -41,6 +41,9 @@ CKM_GOSTR3410_KEY_PAIR_GEN = 0x00001200
 CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
 
+# Типы пользователей
+CKU_USER = 1
+
 # Возвращаемое значение PKCS#11 при отсутствии токена в слоте
 CKR_TOKEN_NOT_PRESENT = 0x000000E0
 
