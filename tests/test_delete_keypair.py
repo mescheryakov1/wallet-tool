@@ -97,4 +97,4 @@ def test_delete_pair_requires_pin(monkeypatch, capsys):
     assert 'PIN-код' in err
     assert destroyed == []
     assert login_args == []
-    assert logout_called == []
+    assert logout_called == [True]
