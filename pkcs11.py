@@ -1,17 +1,19 @@
 import ctypes
+import os
 import sys
 from pkcs11_structs import CK_VOID_PTR
 
 def load_pkcs11_lib():
     """Загружает библиотеку PKCS#11 в зависимости от платформы."""
+    base = os.path.dirname(__file__)
     if sys.platform.startswith('win'):
-        path = './rtpkcs11ecp.dll'
+        path = os.path.join(base, 'rtpkcs11ecp.dll')
         loader = ctypes.WinDLL  # Используем stdcall для Windows
     elif sys.platform == 'darwin':
-        path = './rtpkcs11ecp.dylib'
+        path = os.path.join(base, 'rtpkcs11ecp.dylib')
         loader = ctypes.CDLL  # Используем cdecl для macOS
     else:
-        path = './librtpkcs11ecp.so'
+        path = os.path.join(base, 'librtpkcs11ecp.so')
         loader = ctypes.CDLL  # Используем cdecl для Linux
 
     try:
