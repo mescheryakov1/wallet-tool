@@ -7,6 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+      PKCS11_VERSION: "Current" # bump to refresh cache when library updates
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +25,15 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
+      - name: Cache RT PKCS#11 .so
+        id: cache-pkcs11
+        uses: actions/cache@v4
+        with:
+          path: librtpkcs11ecp.so
+          key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
+
       - name: Download RT PKCS#11 .so
+        if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         run: |
           curl -L -o librtpkcs11ecp.so \
             http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Linux/x64/librtpkcs11ecp.so
