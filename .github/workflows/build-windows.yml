@@ -8,6 +8,7 @@ jobs:
     runs-on: windows-latest
     env:
       EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+      PKCS11_VERSION: "Current" # bump to refresh cache when library updates
 
     steps:
       # 1. Забираем ваш код
@@ -24,7 +25,15 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
+      - name: Cache pkcs11 dll
+        id: cache-pkcs11
+        uses: actions/cache@v4
+        with:
+          path: rtpkcs11ecp.dll
+          key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
+
       - name: Download pkcs11 dll
+        if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         shell: pwsh
         run: Invoke-WebRequest -Uri "http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Windows/x64/rtpkcs11ecp.dll" -OutFile rtpkcs11ecp.dll
 

@@ -6,6 +6,7 @@ jobs:
     runs-on: macos-latest
     env:
       EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+      PKCS11_VERSION: "Current" # bump to refresh cache when library updates
 
     steps:
       - uses: actions/checkout@v4
@@ -20,13 +21,24 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
-      - name: Download and extract RT PKCS#11 Framework
+      - name: Cache RT PKCS#11 framework
+        id: cache-pkcs11
+        uses: actions/cache@v4
+        with:
+          path: rtpkcs11ecp.framework.zip
+          key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
+
+      - name: Download RT PKCS#11 Framework
+        if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         run: |
           # Скачиваем zip-фреймворк (x64+arm64)
           curl -L -o rtpkcs11ecp.framework.zip \
             https://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Mac/x64+arm64/rtpkcs11ecp.framework.zip
+
+      - name: Extract RT PKCS#11 Framework
+        run: |
           # Распаковываем: zip содержит папку rtpkcs11ecp.framework
-          unzip rtpkcs11ecp.framework.zip
+          unzip -o rtpkcs11ecp.framework.zip
           # Находим папку Versions внутри фреймворка
           version_dir=$(find rtpkcs11ecp.framework/Versions -maxdepth 1 -type d | sort | tail -n 1)
           # Копируем бинарник из Version/* и даём ему расширение .dylib
