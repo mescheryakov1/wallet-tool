@@ -571,7 +571,6 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
         print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
         return
 
-    logged_in = False
     try:
         if not pin:
             print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
@@ -581,7 +580,6 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
         if rv != 0:
             print(f'C_Login вернула ошибку: 0x{rv:08X}')
             return
-        logged_in = True
 
         def search_objects(obj_class):
             class_val = ctypes.c_ulong(obj_class)
@@ -627,10 +625,9 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
             key_id = get_id(h)
             objects.setdefault(key_id, {})['public'] = h
 
-        if logged_in:
-            for h in search_objects(CKO_PRIVATE_KEY):
-                key_id = get_id(h)
-                objects.setdefault(key_id, {})['private'] = h
+        for h in search_objects(CKO_PRIVATE_KEY):
+            key_id = get_id(h)
+            objects.setdefault(key_id, {})['private'] = h
 
         ids = sorted(objects.keys(), key=lambda x: x or b'')
         if number < 1 or number > len(ids):
@@ -647,6 +644,5 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
             if rv != 0:
                 print(f'Ошибка удаления закрытого ключа: 0x{rv:08X}')
     finally:
-        if logged_in:
-            pkcs11.C_Logout(session)
+        pkcs11.C_Logout(session)
         pkcs11.C_CloseSession(session)
