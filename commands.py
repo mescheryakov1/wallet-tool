@@ -75,6 +75,8 @@ def format_attribute_value(value: bytes, mode: str) -> str:
             return "двоичные данные"
         if not all(ch.isprintable() or ch.isspace() for ch in decoded):
             return "двоичные данные"
+        if len(decoded) > 30:
+            return decoded[:30] + "..."
         return decoded
 
     raise ValueError(f"Unknown mode {mode}")
