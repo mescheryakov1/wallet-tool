@@ -1,24 +1,29 @@
-import ctypes
+import os
 import sys
+import ctypes
 from pkcs11_structs import CK_VOID_PTR
 
+
 def load_pkcs11_lib():
-    """Загружает библиотеку PKCS#11 в зависимости от платформы."""
-    if sys.platform.startswith('win'):
-        path = './wtpkcs11ecp.dll'
-        loader = ctypes.WinDLL  # Используем stdcall для Windows
-    elif sys.platform == 'darwin':
-        path = './wtpkcs11ecp.dylib'
-        loader = ctypes.CDLL  # Используем cdecl для macOS
+    # выбрать имя файла библиотеки для текущей платформы
+    if sys.platform.startswith("win"):
+        lib_filename = "wtpkcs11ecp.dll"
+        loader = ctypes.WinDLL
+    elif sys.platform == "darwin":
+        lib_filename = "wtpkcs11ecp.dylib"
+        loader = ctypes.CDLL
     else:
-        path = './libwtpkcs11ecp.so'
-        loader = ctypes.CDLL  # Используем cdecl для Linux
+        lib_filename = "libwtpkcs11ecp.so"
+        loader = ctypes.CDLL
+
+    # путь к директории самого исполняемого файла (dist/)
+    runtime_dir = os.path.dirname(sys.executable)
+    lib_path = os.path.join(runtime_dir, lib_filename)
 
     try:
-        return loader(path)
+        return loader(lib_path)
     except OSError as e:
-        print(f'Ошибка загрузки {path}: {e}', file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Ошибка загрузки {lib_path}: {e}") from e
 
 def initialize_library(pkcs11):
     pkcs11.C_Initialize.argtypes = [CK_VOID_PTR]
