@@ -58,6 +58,36 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
     assert logout_called == []
 
 
+def test_library_info_prints_wallet_description(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+    expected_desc = "Rutoken Wallet PKCS #11 library"
+
+    def get_info(info_ptr):
+        info = ctypes.cast(info_ptr, ctypes.POINTER(structs.CK_INFO)).contents
+        info.cryptokiVersion.major = 2
+        info.cryptokiVersion.minor = 40
+        info.libraryVersion.major = 3
+        info.libraryVersion.minor = 20
+        info.manufacturerID = b"Aktiv".ljust(len(info.manufacturerID), b"\0")
+        info.libraryDescription = expected_desc.encode("utf-8").ljust(
+            len(info.libraryDescription),
+            b"\0",
+        )
+        return 0
+
+    pkcs11_mock.C_GetInfo = get_info
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.library_info()
+
+    out = capsys.readouterr().out
+    assert expected_desc in out
+
+
 def test_list_objects_with_pin_search_templates(monkeypatch):
     pkcs11_mock = SimpleNamespace()
 
