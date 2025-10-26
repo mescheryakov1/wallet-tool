@@ -1,8 +1,6 @@
 name: Build macOS Executable
 
-on:
-  push:
-  pull_request:
+on: [push]
 
 jobs:
   build-macos:
@@ -38,7 +36,7 @@ jobs:
         with:
           path: |
             .cache/wtpkcs11ecp
-            libwtpkcs11ecp.dylib
+            wtpkcs11ecp.dylib
           key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
 
       - name: Download WT PKCS#11 .dylib
@@ -48,15 +46,17 @@ jobs:
             --tag 3rdparty \
             --pattern macos \
             --pattern x86_64 \
-            --library-pattern libwtpkcs11ecp.dylib
+            --library-pattern wtpkcs11ecp.dylib \
+            --target wtpkcs11ecp.dylib
 
       - name: Build executable
         run: pyinstaller --onefile main.py
 
       - name: Copy .dylib
-        run: cp libwtpkcs11ecp.dylib dist/
+        run: cp wtpkcs11ecp.dylib dist/
 
       - name: Test application
+        shell: bash
         run: |
           output=$(./dist/main --library-info 2>&1)
           echo "App output:"
