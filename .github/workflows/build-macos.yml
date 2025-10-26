@@ -79,7 +79,8 @@ jobs:
 
           actual_desc=$(echo "$output" \
             | sed -n 's/^[[:space:]]*Library Description:[[:space:]]*//p' \
-            | head -n1)
+            | head -n1 \
+            | sed 's/[[:space:]]*$//')
 
           echo "Detected description: '$actual_desc'"
           echo "Expected description: '$EXPECTED_DESCRIPTION'"
