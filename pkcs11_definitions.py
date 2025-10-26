@@ -1,5 +1,11 @@
 import ctypes
-from pkcs11_structs import CK_INFO, CK_SLOT_INFO, CK_TOKEN_INFO, CK_ATTRIBUTE
+from pkcs11_structs import (
+    CK_INFO,
+    CK_SLOT_INFO,
+    CK_TOKEN_INFO,
+    CK_ATTRIBUTE,
+    CK_TOKEN_INFO_EXTENDED,
+)
 
 def define_pkcs11_functions(pkcs11):
     """Определяет аргументы и возвращаемые значения для функций PKCS#11."""
@@ -14,6 +20,14 @@ def define_pkcs11_functions(pkcs11):
     # C_GetTokenInfo
     pkcs11.C_GetTokenInfo.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_TOKEN_INFO)]
     pkcs11.C_GetTokenInfo.restype = ctypes.c_ulong
+
+    # C_EX_GetTokenInfoExtended
+    if hasattr(pkcs11, 'C_EX_GetTokenInfoExtended'):
+        pkcs11.C_EX_GetTokenInfoExtended.argtypes = [
+            ctypes.c_ulong,
+            ctypes.POINTER(CK_TOKEN_INFO_EXTENDED),
+        ]
+        pkcs11.C_EX_GetTokenInfoExtended.restype = ctypes.c_ulong
 
     # C_OpenSession
     pkcs11.C_OpenSession.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]

@@ -4,6 +4,7 @@ from pkcs11 import pkcs11_command
 from pkcs11_structs import (
     CK_INFO,
     CK_TOKEN_INFO,
+    CK_TOKEN_INFO_EXTENDED,
     CK_ATTRIBUTE,
     CKA_CLASS,
     CKA_LABEL,
@@ -33,6 +34,11 @@ from pkcs11_structs import (
     CKM_GOSTR3410_KEY_PAIR_GEN,
     CK_MECHANISM,
     CKU_USER,
+    TOKEN_FLAGS_USER_PIN_NOT_DEFAULT,
+    TOKEN_FLAGS_SUPPORT_JOURNAL,
+    TOKEN_FLAGS_USER_PIN_UTF8,
+    TOKEN_FLAGS_FW_CHECKSUM_UNAVAILIBLE,
+    TOKEN_FLAGS_FW_CHECKSUM_INVALID,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -80,6 +86,135 @@ def format_attribute_value(value: bytes, mode: str) -> str:
         return decoded
 
     raise ValueError(f"Unknown mode {mode}")
+
+
+def _decode_char_array(char_array) -> str:
+    raw = bytes(char_array)
+    text = raw.rstrip(b"\0 ").decode("utf-8", errors="ignore").strip()
+    return text if text else "—"
+
+
+def _format_version(version) -> str:
+    return f"{version.major}.{version.minor}"
+
+
+def _format_hex_bytes(data: bytes) -> str:
+    if not data:
+        return "—"
+    return " ".join(f"{byte:02X}" for byte in data)
+
+
+def _prepare_value(value) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, str):
+        return value if value else "—"
+    return str(value)
+
+
+def _print_table(title: str, rows, headers=("Параметр", "Значение")) -> None:
+    if not rows:
+        return
+    print(title)
+    col1_width = max(len(headers[0]), *(len(row[0]) for row in rows))
+    col2_width = max(len(headers[1]), *(len(row[1]) for row in rows))
+    print(f"{headers[0].ljust(col1_width)} | {headers[1].ljust(col2_width)}")
+    print(f"{'-' * col1_width}-+-{'-' * col2_width}")
+    for name, value in rows:
+        print(f"{name.ljust(col1_width)} | {value}")
+    print()
+
+
+@pkcs11_command
+def show_wallet_info(pkcs11, slot_id):
+    """Получить подробную информацию о кошельке."""
+
+    define_pkcs11_functions(pkcs11)
+
+    token_info = CK_TOKEN_INFO()
+    rv = pkcs11.C_GetTokenInfo(slot_id, ctypes.byref(token_info))
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_GetTokenInfo вернула ошибку: 0x{rv:08X}')
+        return
+
+    if not hasattr(pkcs11, 'C_EX_GetTokenInfoExtended'):
+        print('Расширенная функция C_EX_GetTokenInfoExtended недоступна в библиотеке')
+        return
+
+    extended_info = CK_TOKEN_INFO_EXTENDED()
+    extended_info.ulSizeofThisStructure = ctypes.sizeof(CK_TOKEN_INFO_EXTENDED)
+    rv = pkcs11.C_EX_GetTokenInfoExtended(slot_id, ctypes.byref(extended_info))
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_EX_GetTokenInfoExtended вернула ошибку: 0x{rv:08X}')
+        return
+
+    basic_rows = [
+        ('Метка', _decode_char_array(token_info.label)),
+        ('Производитель', _decode_char_array(token_info.manufacturerID)),
+        ('Модель', _decode_char_array(token_info.model)),
+        ('Серийный номер', _decode_char_array(token_info.serialNumber)),
+        ('Флаги (значение)', f"0x{token_info.flags:08X}"),
+        ('Версия аппаратная', _format_version(token_info.hardwareVersion)),
+        ('Версия прошивки', _format_version(token_info.firmwareVersion)),
+    ]
+    basic_rows = [(name, _prepare_value(value)) for name, value in basic_rows]
+
+    pin_rows = [
+        ('Макс. длина PIN (стандарт)', token_info.ulMaxPinLen),
+        ('Мин. длина PIN (стандарт)', token_info.ulMinPinLen),
+        ('Макс. длина PIN (пользователь)', extended_info.ulMaxUserPinLen),
+        ('Мин. длина PIN (пользователь)', extended_info.ulMinUserPinLen),
+        ('Макс. число попыток (пользователь)', extended_info.ulMaxUserRetryCount),
+        ('Осталось попыток (пользователь)', extended_info.ulUserRetryCountLeft),
+    ]
+    pin_rows = [(name, _prepare_value(value)) for name, value in pin_rows]
+
+    serial_be = bytes(extended_info.serialNumber)
+    atr_bytes = bytes(extended_info.ATR)[: extended_info.ulATRLen]
+    firmware_checksum = (
+        'недоступно'
+        if extended_info.flags & TOKEN_FLAGS_FW_CHECKSUM_UNAVAILIBLE
+        else f"0x{extended_info.ulFirmwareChecksum:08X}"
+    )
+    if extended_info.flags & TOKEN_FLAGS_FW_CHECKSUM_INVALID:
+        firmware_checksum += ' (некорректна)'
+
+    device_rows = [
+        ('Номер микропрограммы', extended_info.ulMicrocodeNumber),
+        ('Номер заказа', extended_info.ulOrderNumber),
+        ('Серийный номер (BE)', _format_hex_bytes(serial_be)),
+        ('Всего памяти, байт', extended_info.ulTotalMemory),
+        ('Свободно памяти, байт', extended_info.ulFreeMemory),
+        ('ATR', _format_hex_bytes(atr_bytes)),
+        ('Длина ATR', extended_info.ulATRLen),
+        ('Напряжение батареи, мВ', extended_info.ulBatteryVoltage),
+        ('Контрольная сумма прошивки', firmware_checksum),
+    ]
+    device_rows = [(name, _prepare_value(value)) for name, value in device_rows]
+
+    flag_descriptions = [
+        (TOKEN_FLAGS_USER_PIN_NOT_DEFAULT, 'Пользовательский PIN изменён'),
+        (TOKEN_FLAGS_SUPPORT_JOURNAL, 'Поддерживается журнал'),
+        (TOKEN_FLAGS_USER_PIN_UTF8, 'Пользовательский PIN в UTF-8'),
+        (TOKEN_FLAGS_FW_CHECKSUM_UNAVAILIBLE, 'Контрольная сумма недоступна'),
+        (TOKEN_FLAGS_FW_CHECKSUM_INVALID, 'Контрольная сумма некорректна'),
+    ]
+    flag_rows = []
+    for mask, description in flag_descriptions:
+        is_set = 'Да' if extended_info.flags & mask else 'Нет'
+        flag_rows.append((description, is_set))
+
+    _print_table('Основная информация о кошельке', basic_rows)
+    _print_table('Параметры PIN-кода', pin_rows)
+    _print_table('Информация об устройстве', device_rows)
+    _print_table('Расширенные флаги', flag_rows, headers=('Флаг', 'Установлен'))
+
 
 @pkcs11_command
 def library_info(pkcs11):

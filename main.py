@@ -8,6 +8,7 @@ from commands import (
     generate_key_pair,
     delete_key_pair,
     change_pin,
+    show_wallet_info,
 )
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
@@ -41,6 +42,8 @@ def main():
                         help='Показать список доступных слотов')
     parser.add_argument('--list-wallets', action='store_true',
                         help='Показать список кошельков (токенов)')
+    parser.add_argument('--show-wallet-info', action='store_true',
+                        help='Показать подробную информацию о кошельке')
     parser.add_argument('--list-objects', action='store_true',
                         help='Показать список объектов в кошельке')
     parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
@@ -68,6 +71,8 @@ def main():
         list_slots()
     elif args.list_wallets:
         list_wallets()
+    elif args.show_wallet_info:
+        show_wallet_info(args.slot_id)
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
     elif args.generate_key:

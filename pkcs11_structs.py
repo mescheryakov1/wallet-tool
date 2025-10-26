@@ -24,6 +24,13 @@ CKK_EC_EDWARDS = 0x00000040
 CKK_EC_MONTGOMERY = 0x00000041
 CKK_GOSTR3410 = 0x00000030
 
+# Флаги токена из расширенной информации, используем только необходимые значения
+TOKEN_FLAGS_USER_PIN_NOT_DEFAULT = 0x00000008
+TOKEN_FLAGS_SUPPORT_JOURNAL = 0x00000400
+TOKEN_FLAGS_USER_PIN_UTF8 = 0x00000800
+TOKEN_FLAGS_FW_CHECKSUM_UNAVAILIBLE = 0x40000000
+TOKEN_FLAGS_FW_CHECKSUM_INVALID = 0x80000000
+
 # Дополнительные атрибуты и механизмы
 CKA_TOKEN = 0x00000001
 CKA_PRIVATE = 0x00000002
@@ -100,6 +107,38 @@ class CK_TOKEN_INFO(ctypes.Structure):
         ('hardwareVersion', CK_VERSION),
         ('firmwareVersion', CK_VERSION),
         ('utcTime', ctypes.c_char * 16),
+    ]
+
+
+class CK_TOKEN_INFO_EXTENDED(ctypes.Structure):
+    if sys.platform.startswith("win"):
+        _pack_ = 1
+    _fields_ = [
+        ('ulSizeofThisStructure', ctypes.c_ulong),
+        ('ulTokenType', ctypes.c_ulong),
+        ('ulProtocolNumber', ctypes.c_ulong),
+        ('ulMicrocodeNumber', ctypes.c_ulong),
+        ('ulOrderNumber', ctypes.c_ulong),
+        ('flags', ctypes.c_ulong),
+        ('ulMaxAdminPinLen', ctypes.c_ulong),
+        ('ulMinAdminPinLen', ctypes.c_ulong),
+        ('ulMaxUserPinLen', ctypes.c_ulong),
+        ('ulMinUserPinLen', ctypes.c_ulong),
+        ('ulMaxAdminRetryCount', ctypes.c_ulong),
+        ('ulAdminRetryCountLeft', ctypes.c_ulong),
+        ('ulMaxUserRetryCount', ctypes.c_ulong),
+        ('ulUserRetryCountLeft', ctypes.c_ulong),
+        ('serialNumber', ctypes.c_ubyte * 8),
+        ('ulTotalMemory', ctypes.c_ulong),
+        ('ulFreeMemory', ctypes.c_ulong),
+        ('ATR', ctypes.c_ubyte * 64),
+        ('ulATRLen', ctypes.c_ulong),
+        ('ulTokenClass', ctypes.c_ulong),
+        ('ulBatteryVoltage', ctypes.c_ulong),
+        ('ulBodyColor', ctypes.c_ulong),
+        ('ulFirmwareChecksum', ctypes.c_ulong),
+        ('ulBatteryPercentage', ctypes.c_ulong),
+        ('ulBatteryFlags', ctypes.c_ulong),
     ]
 
 class CK_ATTRIBUTE(ctypes.Structure):
