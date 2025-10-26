@@ -381,3 +381,91 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     assert any("CKA_LABEL" in line for line in out[pub_index:pub_index + 5])
     assert login_args[0][1] == structs.CKU_USER
     assert logout_called == [True]
+
+
+def test_change_pin_success(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 321
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    login_calls = []
+
+    def login(session, user_type, pin_ptr, length):
+        session_val = session if isinstance(session, int) else session.value
+        user_val = user_type if isinstance(user_type, int) else user_type.value
+        if isinstance(pin_ptr, (bytes, bytearray)):
+            pin_value = bytes(pin_ptr[:length])
+        else:
+            pin_value = ctypes.string_at(pin_ptr, length)
+        login_calls.append((session_val, user_val, pin_value, length))
+        return 0
+
+    pkcs11_mock.C_Login = login
+
+    setpin_calls = []
+
+    def set_pin(session, old_ptr, old_len, new_ptr, new_len):
+        session_val = session if isinstance(session, int) else session.value
+        if isinstance(old_ptr, (bytes, bytearray)):
+            old_value = bytes(old_ptr[:old_len])
+        else:
+            old_value = ctypes.string_at(old_ptr, old_len)
+        if isinstance(new_ptr, (bytes, bytearray)):
+            new_value = bytes(new_ptr[:new_len])
+        else:
+            new_value = ctypes.string_at(new_ptr, new_len)
+        setpin_calls.append((session_val, old_value, new_value, old_len, new_len))
+        return 0
+
+    pkcs11_mock.C_SetPIN = set_pin
+
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(session if isinstance(session, int) else session.value) or 0
+
+    close_called = []
+    pkcs11_mock.C_CloseSession = lambda session: close_called.append(session if isinstance(session, int) else session.value) or 0
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.change_pin(slot_id=2, old_pin="0000", new_pin="1234")
+
+    out = capsys.readouterr().out
+    assert "PIN-код успешно изменён." in out
+    assert login_calls == [(321, structs.CKU_USER, b"0000", 4)]
+    assert setpin_calls == [(321, b"0000", b"1234", 4, 4)]
+    assert logout_called == [321]
+    assert close_called == [321]
+
+
+def test_change_pin_missing_new_pin(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 111
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+    pkcs11_mock.C_Login = lambda *args: (_ for _ in ()).throw(AssertionError("Should not login"))
+    pkcs11_mock.C_SetPIN = lambda *args: (_ for _ in ()).throw(AssertionError("Should not set pin"))
+    pkcs11_mock.C_Logout = lambda session: (_ for _ in ()).throw(AssertionError("Should not logout"))
+
+    close_called = []
+    pkcs11_mock.C_CloseSession = lambda session: close_called.append(session if isinstance(session, int) else session.value) or 0
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.change_pin(slot_id=0, old_pin="0000", new_pin=None)
+
+    captured = capsys.readouterr()
+    assert "Необходимо указать текущий и новый PIN-коды" in captured.err
+    assert close_called == [111]

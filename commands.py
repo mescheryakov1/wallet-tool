@@ -308,6 +308,63 @@ def list_objects(pkcs11, slot_id, pin):
 
 
 @pkcs11_command
+def change_pin(pkcs11, slot_id, old_pin, new_pin):
+    """Сменить пользовательский PIN-код токена."""
+    define_pkcs11_functions(pkcs11)
+
+    session = ctypes.c_ulong()
+    rv = pkcs11.C_OpenSession(
+        slot_id,
+        CKF_SERIAL_SESSION | CKF_RW_SESSION,
+        None,
+        None,
+        ctypes.byref(session),
+    )
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+        return
+
+    logged_in = False
+    try:
+        if old_pin is None or new_pin is None:
+            print(
+                'Необходимо указать текущий и новый PIN-коды',
+                file=sys.stderr,
+            )
+            return
+
+        old_pin_bytes = old_pin.encode('utf-8')
+        new_pin_bytes = new_pin.encode('utf-8')
+
+        rv = pkcs11.C_Login(
+            session, CKU_USER, old_pin_bytes, len(old_pin_bytes)
+        )
+        if rv != 0:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            return
+        logged_in = True
+
+        rv = pkcs11.C_SetPIN(
+            session,
+            old_pin_bytes,
+            len(old_pin_bytes),
+            new_pin_bytes,
+            len(new_pin_bytes),
+        )
+        if rv != 0:
+            print(f'C_SetPIN вернула ошибку: 0x{rv:08X}')
+        else:
+            print('PIN-код успешно изменён.')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
+        pkcs11.C_CloseSession(session)
+
+
+@pkcs11_command
 def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
     """Generate key pair on token.
 

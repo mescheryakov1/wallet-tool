@@ -7,6 +7,7 @@ from commands import (
     list_objects,
     generate_key_pair,
     delete_key_pair,
+    change_pin,
 )
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
@@ -50,6 +51,10 @@ def main():
                         help='CKA_LABEL для создаваемой ключевой пары')
     parser.add_argument('--delete-key', type=int,
                         help='Удалить ключевую пару по номеру')
+    parser.add_argument('--change-pin', action='store_true',
+                        help='Сменить пользовательский PIN-код')
+    parser.add_argument('--new-pin', type=str, default=None,
+                        help='Новый PIN-код для смены')
     parser.add_argument('--slot-id', type=int, default=0,
                         help='Идентификатор слота для выполнения команды (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default=None,
@@ -78,6 +83,8 @@ def main():
             )
     elif args.delete_key is not None:
         delete_key_pair(args.slot_id, args.pin, args.delete_key)
+    elif args.change_pin:
+        change_pin(args.slot_id, args.pin, args.new_pin)
     else:
         parser.print_help()
 

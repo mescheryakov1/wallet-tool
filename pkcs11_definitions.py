@@ -23,6 +23,16 @@ def define_pkcs11_functions(pkcs11):
     pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
     pkcs11.C_Login.restype = ctypes.c_ulong
 
+    # C_SetPIN
+    pkcs11.C_SetPIN.argtypes = [
+        ctypes.c_ulong,  # CK_SESSION_HANDLE
+        ctypes.c_char_p,  # pOldPin
+        ctypes.c_ulong,   # ulOldLen
+        ctypes.c_char_p,  # pNewPin
+        ctypes.c_ulong,   # ulNewLen
+    ]
+    pkcs11.C_SetPIN.restype = ctypes.c_ulong
+
     # C_FindObjectsInit
     pkcs11.C_FindObjectsInit.argtypes = [ctypes.c_ulong, ctypes.POINTER(CK_ATTRIBUTE), ctypes.c_ulong]  # CK_ATTRIBUTE
     pkcs11.C_FindObjectsInit.restype = ctypes.c_ulong
