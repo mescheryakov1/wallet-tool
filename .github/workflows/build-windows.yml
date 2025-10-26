@@ -7,8 +7,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     env:
-      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+      EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       # 1. Забираем ваш код
@@ -59,9 +60,9 @@ jobs:
           # 2) Показываем весь вывод, чтобы было видно, что вернулось
           Write-Host "App output:`n$text"
 
-          # 3) Проверяем, что в нём есть Library Description с «ECP PKCS #11 library»
-          if ($text -notmatch 'Library Description:.*ECP PKCS #11 library') {
-            Write-Error "Не удалось найти ожидаемую строку 'Library Description: ... ECP PKCS #11 library' в выводе"
+          # 3) Проверяем, что в нём есть Library Description с ожидаемой строкой
+          if ($text -notmatch "Library Description:.*$($env:EXPECTED_DESCRIPTION)") {
+            Write-Error "Не удалось найти ожидаемую строку 'Library Description: $($env:EXPECTED_DESCRIPTION)' в выводе"
             exit 1
           }
           

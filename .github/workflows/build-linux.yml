@@ -6,8 +6,9 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     env:
-      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
+      EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
