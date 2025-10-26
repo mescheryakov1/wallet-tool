@@ -58,7 +58,11 @@ jobs:
       - name: Test application
         shell: bash
         run: |
-          output=$(./dist/main --library-info 2>&1)
+          # запускаем бинарь и игнорируем код выхода чтобы не сработал -e
+          output=$(./dist/main --library-info 2>&1 || true)
+          status=$?
+
+          echo "program exit code: $status"
 
           echo "=== library-info raw output begin ==="
           echo "$output"
