@@ -1,6 +1,13 @@
 name: Build macOS Executable
 
-on: [push]
+on:
+  push:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: false
+        type: string
+        default: macos-package
 
 jobs:
   build-macos:
@@ -11,6 +18,7 @@ jobs:
       EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ARTIFACT_NAME: ${{ inputs.artifact-name || 'macos-package' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -90,5 +98,5 @@ jobs:
       - name: Upload macOS package
         uses: actions/upload-artifact@v4
         with:
-          name: macos-package
+          name: ${{ env.ARTIFACT_NAME }}
           path: dist/**

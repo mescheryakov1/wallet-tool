@@ -1,0 +1,65 @@
+name: Publish release artifacts
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    uses: ./.github/workflows/build-linux.yml
+    secrets: inherit
+    with:
+      artifact-name: wallet-tool-linux
+
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+    secrets: inherit
+    with:
+      artifact-name: wallet-tool-macos
+
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+    secrets: inherit
+    with:
+      artifact-name: wallet-tool-windows
+
+  publish:
+    needs:
+      - build-linux
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wallet-tool-linux
+          path: artifacts/linux
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wallet-tool-macos
+          path: artifacts/macos
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wallet-tool-windows
+          path: artifacts/windows
+
+      - name: Create release archives
+        run: |
+          set -euo pipefail
+          mkdir -p uploads
+          tar -C artifacts/linux -czf uploads/wallet-tool-linux.tar.gz .
+          tar -C artifacts/macos -czf uploads/wallet-tool-macos.tar.gz .
+          (cd artifacts/windows && zip -r ../../uploads/wallet-tool-windows.zip .)
+
+      - name: Attach artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: uploads/*
