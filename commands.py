@@ -101,26 +101,6 @@ def library_info(pkcs11):
         print(f'  Library Version:     {libver}')
 
 @pkcs11_command
-def factory_reset(pkcs11, slot_id, pin, label):
-    define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
-
-    slot_id = int(slot_id)
-    pin_bytes = pin.encode('utf-8') if pin else None
-    label = label.encode('utf-8')
-
-    if pin_bytes is None:
-        print('Необходимо указать PIN-код для фабричного сброса.', file=sys.stderr)
-        return
-
-    rv = pkcs11.C_EX_InitToken(slot_id, pin_bytes, label)
-    if rv == CKR_TOKEN_NOT_PRESENT:
-        print('Нет подключенного кошелька, подключите кошелек')
-    elif rv != 0:
-        print(f'C_EX_InitToken вернула ошибку: 0x{rv:08X}')
-    else:
-        print('Фабричный сброс выполнен успешно.')
-
-@pkcs11_command
 def list_slots(pkcs11):
     """Выводит список доступных слотов."""
     define_pkcs11_functions(pkcs11)  # Настраиваем argtypes и restype
