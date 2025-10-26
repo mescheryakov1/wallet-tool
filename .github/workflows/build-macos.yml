@@ -58,9 +58,13 @@ jobs:
       - name: Test application
         shell: bash
         run: |
+          pushd dist > /dev/null
+
           # запускаем бинарь и игнорируем код выхода чтобы не сработал -e
-          output=$(./dist/main --library-info 2>&1 || true)
+          output=$(./main --library-info 2>&1 || true)
           status=$?
+
+          popd > /dev/null
 
           echo "program exit code: $status"
 
