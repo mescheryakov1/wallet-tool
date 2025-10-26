@@ -64,18 +64,8 @@ jobs:
         shell: bash
         run: |
           pushd dist > /dev/null
-
-          # запускаем бинарь и игнорируем код выхода чтобы не сработал -e
           output=$(./main --library-info 2>&1 || true)
-          status=$?
-
           popd > /dev/null
-
-          echo "program exit code: $status"
-
-          echo "=== library-info raw output begin ==="
-          echo "$output"
-          echo "=== library-info raw output end ==="
 
           actual_desc=$(echo "$output" \
             | sed -n 's/^[[:space:]]*Library Description:[[:space:]]*//p' \
