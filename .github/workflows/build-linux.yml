@@ -6,8 +6,9 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     env:
-      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
-      PKCS11_VERSION: "Current" # bump to refresh cache when library updates
+      EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
+      PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,24 +26,28 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
-      - name: Cache RT PKCS#11 .so
+      - name: Cache WT PKCS#11 files
         id: cache-pkcs11
         uses: actions/cache@v4
         with:
-          path: librtpkcs11ecp.so
+          path: |
+            .cache/wtpkcs11ecp
+            libwtpkcs11ecp.so
           key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
 
-      - name: Download RT PKCS#11 .so
+      - name: Download WT PKCS#11 .so
         if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         run: |
-          curl -L -o librtpkcs11ecp.so \
-            http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Linux/x64/librtpkcs11ecp.so
+          python scripts/download_wtpkcs11ecp.py \
+            --pattern linux \
+            --pattern x86_64 \
+            --library-pattern libwtpkcs11ecp.so
 
       - name: Build executable
         run: pyinstaller --onefile main.py
         
       - name: copy .so
-        run: cp librtpkcs11ecp.so dist/
+        run: cp libwtpkcs11ecp.so dist/
 
       - name: Test application
         run: |

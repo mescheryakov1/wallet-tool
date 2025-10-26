@@ -7,8 +7,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
     env:
-      EXPECTED_DESCRIPTION: "Rutoken ECP PKCS #11 library"
-      PKCS11_VERSION: "Current" # bump to refresh cache when library updates
+      EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
+      PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       # 1. Забираем ваш код
@@ -25,17 +26,23 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
-      - name: Cache pkcs11 dll
+      - name: Cache pkcs11 files
         id: cache-pkcs11
         uses: actions/cache@v4
         with:
-          path: rtpkcs11ecp.dll
+          path: |
+            .cache\wtpkcs11ecp
+            wtpkcs11ecp.dll
           key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
 
       - name: Download pkcs11 dll
         if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         shell: pwsh
-        run: Invoke-WebRequest -Uri "http://download.rutoken.ru/Rutoken/PKCS11Lib/Current/Windows/x64/rtpkcs11ecp.dll" -OutFile rtpkcs11ecp.dll
+        run: |
+          python scripts/download_wtpkcs11ecp.py `
+            --pattern windows `
+            --pattern x86_64 `
+            --library-pattern wtpkcs11ecp.dll
 
       # 3. Собираем один exe-файл
       - name: Build exe
@@ -43,7 +50,7 @@ jobs:
         
       - name: Copy DLL
         shell: pwsh
-        run: Copy-Item rtpkcs11ecp.dll dist\
+        run: Copy-Item wtpkcs11ecp.dll dist\
 
       - name: Test application
         shell: pwsh
@@ -55,9 +62,9 @@ jobs:
           # 2) Показываем весь вывод, чтобы было видно, что вернулось
           Write-Host "App output:`n$text"
 
-          # 3) Проверяем, что в нём есть Library Description с «ECP PKCS #11 library»
-          if ($text -notmatch 'Library Description:.*ECP PKCS #11 library') {
-            Write-Error "Не удалось найти ожидаемую строку 'Library Description: ... ECP PKCS #11 library' в выводе"
+          # 3) Проверяем, что в нём есть Library Description с ожидаемой строкой
+          if ($text -notmatch "Library Description:.*$($env:EXPECTED_DESCRIPTION)") {
+            Write-Error "Не удалось найти ожидаемую строку 'Library Description: $($env:EXPECTED_DESCRIPTION)' в выводе"
             exit 1
           }
           

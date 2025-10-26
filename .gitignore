@@ -3,6 +3,9 @@ build/
 __pycache__/
 *.spec
 *.so
+*.dll
+*.dylib
+.cache/
 
 # VS Code and Codespaces metadata
 .vscode/
