@@ -1,7 +1,14 @@
 name: Build Windows Executable
 
 # Запускаем при пуше в любую ветку
-on: [push]
+on:
+  push:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: false
+        type: string
+        default: windows-package
 
 jobs:
   build-windows:
@@ -10,6 +17,7 @@ jobs:
       EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ARTIFACT_NAME: ${{ inputs.artifact-name || 'windows-package' }}
 
     steps:
       # 1. Забираем ваш код
@@ -72,5 +80,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-package
+          name: ${{ env.ARTIFACT_NAME }}
           path: dist/**

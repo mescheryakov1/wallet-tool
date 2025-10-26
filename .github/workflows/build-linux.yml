@@ -1,6 +1,14 @@
 # .github/workflows/build-linux.yml
 name: Build Linux Executable
-on: [push]
+
+on:
+  push:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: false
+        type: string
+        default: linux-package
 
 jobs:
   build-linux:
@@ -9,6 +17,7 @@ jobs:
       EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty" # bump to refresh cache when library updates
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      ARTIFACT_NAME: ${{ inputs.artifact-name || 'linux-package' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -66,5 +75,5 @@ jobs:
       - name: Upload Linux package
         uses: actions/upload-artifact@v4
         with:
-          name: linux-package
+          name: ${{ env.ARTIFACT_NAME }}
           path: dist/**
