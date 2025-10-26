@@ -55,6 +55,11 @@ jobs:
       - name: Copy .dylib
         run: cp wtpkcs11ecp.dylib dist/
 
+      - name: Codesign main and dylib
+        run: |
+          codesign --force --sign - dist/wtpkcs11ecp.dylib
+          codesign --force --sign - dist/main
+
       - name: Test application
         shell: bash
         run: |
