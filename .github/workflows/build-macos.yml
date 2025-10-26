@@ -59,14 +59,29 @@ jobs:
         shell: bash
         run: |
           output=$(./dist/main --library-info 2>&1)
-          echo "App output:"
-          echo "$output"
 
-          if ! echo "$output" | grep -F "Library Description: $EXPECTED_DESCRIPTION"; then
-            echo "❌ Не удалось найти ожидаемую строку 'Library Description: $EXPECTED_DESCRIPTION'" >&2
+          echo "=== library-info raw output begin ==="
+          echo "$output"
+          echo "=== library-info raw output end ==="
+
+          actual_desc=$(echo "$output" \
+            | sed -n 's/^Library Description:[[:space:]]*//p' \
+            | head -n1)
+
+          echo "Detected description: '$actual_desc'"
+          echo "Expected description: '$EXPECTED_DESCRIPTION'"
+
+          if [ -z "$actual_desc" ]; then
+            echo "❌ не удалось извлечь Library Description из вывода" >&2
             exit 1
           fi
-          echo "✅ Библиотека загружена"
+
+          if [ "$actual_desc" != "$EXPECTED_DESCRIPTION" ]; then
+            echo "❌ строка не совпала" >&2
+            exit 1
+          fi
+
+          echo "✅ библиотека загружена и строка совпала"
 
       - name: Upload macOS package
         uses: actions/upload-artifact@v4
