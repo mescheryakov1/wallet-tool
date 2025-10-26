@@ -58,10 +58,10 @@ def main():
                         help='Сменить пользовательский PIN-код')
     parser.add_argument('--new-pin', type=str, default=None,
                         help='Новый PIN-код для смены')
-    parser.add_argument('--slot-id', type=int, default=0,
-                        help='Идентификатор слота для выполнения команды (по умолчанию 0)')
-    parser.add_argument('--pin', type=str, default=None,
-                        help='PIN-код для выполнения команды (если требуется)')
+    parser.add_argument('--wallet-id', type=int, default=0,
+                        help='Идентификатор кошелька для выполнения команды (по умолчанию 0)')
+    parser.add_argument('--pin', type=str, default='12345678',
+                        help='PIN-код для выполнения команды (по умолчанию 12345678)')
 
     args = parser.parse_args()
 
@@ -72,24 +72,24 @@ def main():
     elif args.list_wallets:
         list_wallets()
     elif args.show_wallet_info:
-        show_wallet_info(args.slot_id)
+        show_wallet_info(args.wallet_id)
     elif args.list_objects:
-        list_objects(args.slot_id, args.pin)
+        list_objects(args.wallet_id, args.pin)
     elif args.generate_key:
         if not args.key_id or not args.key_label:
             print('Необходимо указать --key-id и --key-label для генерации ключа', file=sys.stderr)
         else:
             generate_key_pair(
-                args.slot_id,
+                args.wallet_id,
                 args.pin,
                 args.generate_key,
                 cka_id=args.key_id,
                 cka_label=args.key_label,
             )
     elif args.delete_key is not None:
-        delete_key_pair(args.slot_id, args.pin, args.delete_key)
+        delete_key_pair(args.wallet_id, args.pin, args.delete_key)
     elif args.change_pin:
-        change_pin(args.slot_id, args.pin, args.new_pin)
+        change_pin(args.wallet_id, args.pin, args.new_pin)
     else:
         parser.print_help()
 

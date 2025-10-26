@@ -68,7 +68,7 @@ def test_generate_rsa2048(monkeypatch):
     setup(monkeypatch, captured)
 
     commands.generate_key_pair(
-        slot_id=1,
+        wallet_id=1,
         pin='1111',
         algorithm='rsa2048',
         cka_id='01',
@@ -93,7 +93,7 @@ def test_generate_ed25519(monkeypatch):
     setup(monkeypatch, captured)
 
     commands.generate_key_pair(
-        slot_id=1,
+        wallet_id=1,
         pin='1111',
         algorithm='ed25519',
         cka_id='AA',
@@ -112,7 +112,7 @@ def test_generate_missing_id_label(monkeypatch, capsys):
     setup(monkeypatch, captured)
 
     commands.generate_key_pair(
-        slot_id=1,
+        wallet_id=1,
         pin='1111',
         algorithm='ed25519',
         cka_id='',
@@ -130,7 +130,7 @@ def test_generate_gost_params(monkeypatch):
     setup(monkeypatch, captured)
 
     commands.generate_key_pair(
-        slot_id=1,
+        wallet_id=1,
         pin='1111',
         algorithm='gost',
         cka_id='GG',

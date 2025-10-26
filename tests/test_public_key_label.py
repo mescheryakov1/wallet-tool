@@ -57,6 +57,6 @@ def test_public_key_has_label(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, 'finalize_library', lambda x: None)
     monkeypatch.setattr(commands, 'define_pkcs11_functions', lambda x: None)
 
-    commands.list_objects(slot_id=1, pin=None)
+    commands.list_objects(wallet_id=1, pin=None)
     out = capsys.readouterr().out
     assert 'CKA_LABEL' in out
