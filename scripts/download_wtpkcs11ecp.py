@@ -14,7 +14,7 @@ from typing import Iterable, Optional
 import zipfile
 
 API_BASE = "https://api.github.com"
-DEFAULT_RELEASE_TAG = "3rd-party-libs"
+DEFAULT_RELEASE_TAG = "3rdparty"
 
 
 def make_headers(token: Optional[str], accept: str) -> dict[str, str]:
