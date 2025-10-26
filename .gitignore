@@ -5,6 +5,7 @@ __pycache__/
 *.so
 *.dll
 *.dylib
+.cache/
 
 # VS Code and Codespaces metadata
 .vscode/

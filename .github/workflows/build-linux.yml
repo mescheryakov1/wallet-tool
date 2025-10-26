@@ -26,11 +26,13 @@ jobs:
       - name: Install build dependencies
         run: pip install -r requirements-build.txt
 
-      - name: Cache WT PKCS#11 .so
+      - name: Cache WT PKCS#11 files
         id: cache-pkcs11
         uses: actions/cache@v4
         with:
-          path: libwtpkcs11ecp.so
+          path: |
+            .cache/wtpkcs11ecp
+            libwtpkcs11ecp.so
           key: pkcs11-${{ runner.os }}-${{ env.PKCS11_VERSION }}
 
       - name: Download WT PKCS#11 .so

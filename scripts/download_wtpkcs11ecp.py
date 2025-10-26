@@ -15,6 +15,7 @@ import zipfile
 
 API_BASE = "https://api.github.com"
 DEFAULT_RELEASE_TAG = "3rdparty"
+DEFAULT_CACHE_DIR = Path(".cache") / "wtpkcs11ecp"
 
 
 def make_headers(token: Optional[str], accept: str) -> dict[str, str]:
@@ -114,6 +115,15 @@ def ensure_target(pattern: Optional[str], target: Optional[Path], default_name: 
     raise SystemExit("Unable to determine target filename. Provide --target or --library-pattern.")
 
 
+def resolve_cache_dir(cache_dir: Optional[Path]) -> Path:
+    if cache_dir:
+        base = cache_dir
+    else:
+        env_value = os.environ.get("WTPKCS11_CACHE_DIR")
+        base = Path(env_value) if env_value else DEFAULT_CACHE_DIR
+    return base if base.is_absolute() else Path.cwd() / base
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download wtpkcs11ecp from GitHub release")
     parser.add_argument(
@@ -144,6 +154,14 @@ def main() -> None:
         type=Path,
         help="Destination path for the library (relative paths are resolved against the current directory).",
     )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        help=(
+            "Directory where downloaded assets and extracted libraries are cached. "
+            "Defaults to .cache/wtpkcs11ecp or the value of WTPKCS11_CACHE_DIR."
+        ),
+    )
     args = parser.parse_args()
 
     repository = args.repository or os.environ.get("GITHUB_REPOSITORY")
@@ -163,22 +181,52 @@ def main() -> None:
         raise SystemExit("Selected asset is missing download URL")
 
     asset_name = asset.get("name", "asset")
+    asset_id = asset.get("id")
+    if asset_id is None:
+        raise SystemExit("Selected asset is missing an id required for caching")
 
-    print(f"Downloading asset '{asset_name}' from release '{args.tag}' in repo '{repository}'...")
+    library_pattern = args.library_pattern
+    target = ensure_target(library_pattern, args.target, asset_name)
+    target = target if target.is_absolute() else Path.cwd() / target
+
+    cache_dir = resolve_cache_dir(args.cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    asset_cache_dir = cache_dir / str(asset_id)
+    asset_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    cached_asset_path = asset_cache_dir / asset_name
+    cached_library_path = asset_cache_dir / target.name
+
+    if cached_library_path.exists():
+        print(f"Using cached library from {cached_library_path}")
+        extracted = move_or_copy(cached_library_path, target)
+        print(f"Library saved to {extracted}")
+        return
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_asset_path = Path(tmpdir) / asset_name
-        download_asset(download_url, token, tmp_asset_path)
+        if cached_asset_path.exists():
+            print(f"Using cached asset {cached_asset_path}")
+            shutil.copy2(cached_asset_path, tmp_asset_path)
+        else:
+            print(
+                f"Downloading asset '{asset_name}' from release '{args.tag}' in repo '{repository}'..."
+            )
+            download_asset(download_url, token, tmp_asset_path)
+            move_or_copy(tmp_asset_path, cached_asset_path)
+
         suffix = tmp_asset_path.suffix.lower()
 
-        library_pattern = args.library_pattern
-        target = ensure_target(library_pattern, args.target, asset_name)
-        target = target if target.is_absolute() else Path.cwd() / target
-
         if suffix == ".zip":
-            extracted = extract_library_from_zip(tmp_asset_path, library_pattern or target.name, target)
+            extracted = extract_library_from_zip(
+                tmp_asset_path,
+                library_pattern or target.name,
+                cached_library_path,
+            )
         else:
-            extracted = move_or_copy(tmp_asset_path, target)
+            extracted = move_or_copy(tmp_asset_path, cached_library_path)
 
+    extracted = move_or_copy(extracted, target)
     print(f"Library saved to {extracted}")
 
 
