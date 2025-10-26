@@ -126,13 +126,13 @@ def _print_table(title: str, rows, headers=("Параметр", "Значени�
 
 
 @pkcs11_command
-def show_wallet_info(pkcs11, slot_id):
+def show_wallet_info(pkcs11, wallet_id=0):
     """Получить подробную информацию о кошельке."""
 
     define_pkcs11_functions(pkcs11)
 
     token_info = CK_TOKEN_INFO()
-    rv = pkcs11.C_GetTokenInfo(slot_id, ctypes.byref(token_info))
+    rv = pkcs11.C_GetTokenInfo(wallet_id, ctypes.byref(token_info))
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
         return
@@ -146,7 +146,7 @@ def show_wallet_info(pkcs11, slot_id):
 
     extended_info = CK_TOKEN_INFO_EXTENDED()
     extended_info.ulSizeofThisStructure = ctypes.sizeof(CK_TOKEN_INFO_EXTENDED)
-    rv = pkcs11.C_EX_GetTokenInfoExtended(slot_id, ctypes.byref(extended_info))
+    rv = pkcs11.C_EX_GetTokenInfoExtended(wallet_id, ctypes.byref(extended_info))
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
         return
@@ -299,13 +299,13 @@ def list_wallets(pkcs11):
             print(f'  Слот {slot_id} не содержит кошелька.')
 
 @pkcs11_command
-def list_objects(pkcs11, slot_id, pin):
+def list_objects(pkcs11, wallet_id=0, pin=None):
     """Выводит список ключей. Если PIN не задан, показываются только публичные ключи."""
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(
-        slot_id,
+        wallet_id,
         CKF_SERIAL_SESSION | CKF_RW_SESSION,
         None,
         None,
@@ -443,13 +443,13 @@ def list_objects(pkcs11, slot_id, pin):
 
 
 @pkcs11_command
-def change_pin(pkcs11, slot_id, old_pin, new_pin):
+def change_pin(pkcs11, wallet_id=0, old_pin=None, new_pin=None):
     """Сменить пользовательский PIN-код токена."""
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(
-        slot_id,
+        wallet_id,
         CKF_SERIAL_SESSION | CKF_RW_SESSION,
         None,
         None,
@@ -500,7 +500,7 @@ def change_pin(pkcs11, slot_id, old_pin, new_pin):
 
 
 @pkcs11_command
-def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
+def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", cka_label=""):
     """Generate key pair on token.
 
     Parameters
@@ -514,7 +514,7 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
 
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(
-        slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
+        wallet_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
     )
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
@@ -728,13 +728,13 @@ def generate_key_pair(pkcs11, slot_id, pin, algorithm, cka_id="", cka_label=""):
 
 
 @pkcs11_command
-def delete_key_pair(pkcs11, slot_id, pin, number):
+def delete_key_pair(pkcs11, wallet_id=0, pin=None, number=None):
     """Delete key pair from token by its index."""
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
     rv = pkcs11.C_OpenSession(
-        slot_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
+        wallet_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
     )
     if rv == CKR_TOKEN_NOT_PRESENT:
         print('Нет подключенного кошелька, подключите кошелек')
@@ -746,6 +746,10 @@ def delete_key_pair(pkcs11, slot_id, pin, number):
     try:
         if not pin:
             print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
+            return
+
+        if number is None:
+            print('Необходимо указать номер ключа для удаления', file=sys.stderr)
             return
 
         rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))

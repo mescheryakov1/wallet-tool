@@ -81,7 +81,7 @@ def setup_mock(monkeypatch, with_private):
 def test_delete_pair_with_private(monkeypatch):
     destroyed, login_args, logout_called = setup_mock(monkeypatch, True)
 
-    commands.delete_key_pair(slot_id=1, pin='0000', number=1)
+    commands.delete_key_pair(wallet_id=1, pin='0000', number=1)
 
     assert set(destroyed) == {10, 11}
     assert login_args[0][1] == structs.CKU_USER
@@ -91,7 +91,7 @@ def test_delete_pair_with_private(monkeypatch):
 def test_delete_pair_requires_pin(monkeypatch, capsys):
     destroyed, login_args, logout_called = setup_mock(monkeypatch, False)
 
-    commands.delete_key_pair(slot_id=1, pin=None, number=1)
+    commands.delete_key_pair(wallet_id=1, pin=None, number=1)
 
     err = capsys.readouterr().err
     assert 'PIN-код' in err
