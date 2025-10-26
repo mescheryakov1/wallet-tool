@@ -156,6 +156,88 @@ def test_list_wallets_no_wallet(monkeypatch, capsys):
     assert "Нет подключенного кошелька" in captured.out
 
 
+def test_show_wallet_info_prints_tables(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def get_token_info(slot, info_ptr):
+        info = ctypes.cast(info_ptr, ctypes.POINTER(structs.CK_TOKEN_INFO)).contents
+        info.label = b"Wallet".ljust(32, b"\0")
+        info.manufacturerID = b"Aktiv".ljust(32, b" ")
+        info.model = b"Model".ljust(16, b" ")
+        info.serialNumber = b"1234567890123456"
+        info.flags = 0x1234
+        info.hardwareVersion.major = 1
+        info.hardwareVersion.minor = 2
+        info.firmwareVersion.major = 3
+        info.firmwareVersion.minor = 4
+        info.ulMaxPinLen = 12
+        info.ulMinPinLen = 4
+        return 0
+
+    pkcs11_mock.C_GetTokenInfo = get_token_info
+
+    def get_token_info_extended(slot, info_ptr):
+        info = ctypes.cast(info_ptr, ctypes.POINTER(structs.CK_TOKEN_INFO_EXTENDED)).contents
+        assert info.ulSizeofThisStructure == ctypes.sizeof(structs.CK_TOKEN_INFO_EXTENDED)
+        info.ulMicrocodeNumber = 101
+        info.ulOrderNumber = 202
+        info.flags = (
+            structs.TOKEN_FLAGS_USER_PIN_NOT_DEFAULT
+            | structs.TOKEN_FLAGS_SUPPORT_JOURNAL
+            | structs.TOKEN_FLAGS_FW_CHECKSUM_INVALID
+        )
+        info.ulMaxUserPinLen = 16
+        info.ulMinUserPinLen = 6
+        info.ulMaxUserRetryCount = 5
+        info.ulUserRetryCountLeft = 3
+        info.serialNumber[:] = (1, 2, 3, 4, 5, 6, 7, 8)
+        info.ulTotalMemory = 4096
+        info.ulFreeMemory = 1024
+        atr = bytes(range(4))
+        for idx, value in enumerate(atr):
+            info.ATR[idx] = value
+        info.ulATRLen = len(atr)
+        info.ulBatteryVoltage = 3000
+        info.ulFirmwareChecksum = 0xABCDEF01
+        return 0
+
+    pkcs11_mock.C_EX_GetTokenInfoExtended = get_token_info_extended
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.show_wallet_info(slot_id=1)
+
+    out = capsys.readouterr().out
+    assert "Основная информация о кошельке" in out
+    assert "Метка" in out and "Wallet" in out
+    assert "Параметры PIN-кода" in out
+    assert "Макс. длина PIN (пользователь)" in out
+    assert "Информация об устройстве" in out
+    assert "Номер микропрограммы" in out
+    assert "Расширенные флаги" in out
+    flag_line = next(line for line in out.splitlines() if "Поддерживается журнал" in line)
+    assert flag_line.strip().endswith("| Да")
+    assert "Контрольная сумма некорректна" in out
+
+
+def test_show_wallet_info_no_token(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+    pkcs11_mock.C_GetTokenInfo = lambda slot, info: structs.CKR_TOKEN_NOT_PRESENT
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.show_wallet_info(slot_id=0)
+
+    out = capsys.readouterr().out
+    assert "Нет подключенного кошелька" in out
+
+
 def test_list_objects_no_wallet(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
     pkcs11_mock.C_OpenSession = lambda *args: structs.CKR_TOKEN_NOT_PRESENT
