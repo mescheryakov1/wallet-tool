@@ -7,10 +7,6 @@ def define_pkcs11_functions(pkcs11):
     pkcs11.C_GetInfo.argtypes = [ctypes.POINTER(CK_INFO)]  # CK_INFO
     pkcs11.C_GetInfo.restype = ctypes.c_ulong
 
-    # C_EX_InitToken
-    pkcs11.C_EX_InitToken.argtypes = [ctypes.c_ulong, ctypes.c_char_p, ctypes.c_char_p]
-    pkcs11.C_EX_InitToken.restype = ctypes.c_ulong
-
     # C_GetSlotList
     pkcs11.C_GetSlotList.argtypes = [ctypes.c_bool, ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_ulong)]
     pkcs11.C_GetSlotList.restype = ctypes.c_ulong

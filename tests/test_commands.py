@@ -156,21 +156,6 @@ def test_list_wallets_no_wallet(monkeypatch, capsys):
     assert "Нет подключенного кошелька" in captured.out
 
 
-def test_factory_reset_no_wallet(monkeypatch, capsys):
-    pkcs11_mock = SimpleNamespace()
-    pkcs11_mock.C_EX_InitToken = lambda *args: structs.CKR_TOKEN_NOT_PRESENT
-
-    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
-    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
-    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
-    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
-
-    commands.factory_reset(slot_id=1, pin="0000", label="")
-
-    captured = capsys.readouterr()
-    assert "Нет подключенного кошелька" in captured.out
-
-
 def test_list_objects_no_wallet(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
     pkcs11_mock.C_OpenSession = lambda *args: structs.CKR_TOKEN_NOT_PRESENT

@@ -2,7 +2,6 @@ import argparse
 import sys
 from commands import (
     library_info,
-    factory_reset,
     list_slots,
     list_wallets,
     list_objects,
@@ -15,20 +14,32 @@ if sys.platform.startswith("win") and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+
+class CustomArgumentParser(argparse.ArgumentParser):
+    def format_help(self):
+        base_help = super().format_help()
+        return "Инструмент для работы с wtpkcs11ecp\n" + base_help
+
+
 def main():
-    parser = argparse.ArgumentParser(
+    parser = CustomArgumentParser(
         description='Утилита для работы с PKCS#11 библиотекой Рутокен',
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        add_help=False,
+    )
+    parser.add_argument(
+        '-h',
+        '--help',
+        action='help',
+        default=argparse.SUPPRESS,
+        help='Показать это справочное сообщение и завершить работу',
+    )
     parser.add_argument('--library-info', action='store_true',
                         help='Показать информацию о библиотеке (C_GetInfo)')
     parser.add_argument('--list-slots', action='store_true',
                         help='Показать список доступных слотов')
     parser.add_argument('--list-wallets', action='store_true',
                         help='Показать список кошельков (токенов)')
-    parser.add_argument('--factory-reset', action='store_true',
-                        help='Выполнить фабричный сброс кошелька')
-    parser.add_argument('--label', type=str, default='',
-                        help='Метка для фабричного сброса (по умолчанию пустая строка)')
     parser.add_argument('--list-objects', action='store_true',
                         help='Показать список объектов в кошельке')
     parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
@@ -52,8 +63,6 @@ def main():
         list_slots()
     elif args.list_wallets:
         list_wallets()
-    elif args.factory_reset:
-        factory_reset(args.slot_id, args.pin, args.label)
     elif args.list_objects:
         list_objects(args.slot_id, args.pin)
     elif args.generate_key:
