@@ -78,7 +78,7 @@ jobs:
           echo "=== library-info raw output end ==="
 
           actual_desc=$(echo "$output" \
-            | sed -n 's/^Library Description:[[:space:]]*//p' \
+            | sed -n 's/^[[:space:]]*Library Description:[[:space:]]*//p' \
             | head -n1)
 
           echo "Detected description: '$actual_desc'"
