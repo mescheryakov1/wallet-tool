@@ -1,10 +1,14 @@
 name: Build macOS Executable
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: read
     env:
       EXPECTED_DESCRIPTION: "Rutoken Wallet PKCS #11 library"
       PKCS11_VERSION: "3rdparty"
@@ -16,10 +20,10 @@ jobs:
       - name: Install native dependencies
         run: |
           brew update
-          brew install pcsclite
+          brew install pcsc-lite || true
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           cache: 'pip'
@@ -41,7 +45,8 @@ jobs:
         if: steps.cache-pkcs11.outputs.cache-hit != 'true'
         run: |
           python scripts/download_wtpkcs11ecp.py \
-            --pattern mac \
+            --tag 3rdparty \
+            --pattern macos \
             --pattern x86_64 \
             --library-pattern libwtpkcs11ecp.dylib
 
