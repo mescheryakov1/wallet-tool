@@ -424,7 +424,7 @@ def list_keys(pkcs11, wallet_id=0, pin=None):
                 if key_type in key_type_description
                 else ''
             )
-            print(f'  Ключ \N{numero sign}{idx}{suffix}:')
+            print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
             if 'public' in pair:
                 h, attrs = pair['public']
                 print('    Публичный ключ')
@@ -739,8 +739,8 @@ def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", 
 
 
 @pkcs11_command
-def delete_key_pair(pkcs11, wallet_id=0, pin=None, number=None):
-    """Delete key pair from token by its index."""
+def delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
+    """Delete key pair from token by its index (``key-number``)."""
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
@@ -759,8 +759,8 @@ def delete_key_pair(pkcs11, wallet_id=0, pin=None, number=None):
             print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
             return
 
-        if number is None:
-            print('Необходимо указать номер ключа для удаления', file=sys.stderr)
+        if key_number is None:
+            print('Необходимо указать параметр --key-number для удаления ключа', file=sys.stderr)
             return
 
         rv = pkcs11.C_Login(session, CKU_USER, pin.encode('utf-8'), len(pin))
@@ -817,11 +817,11 @@ def delete_key_pair(pkcs11, wallet_id=0, pin=None, number=None):
             objects.setdefault(key_id, {})['private'] = h
 
         ids = sorted(objects.keys(), key=lambda x: x or b'')
-        if number < 1 or number > len(ids):
+        if key_number < 1 or key_number > len(ids):
             print('Ключ с таким номером не найден')
             return
 
-        pair = objects[ids[number - 1]]
+        pair = objects[ids[key_number - 1]]
         if 'public' in pair:
             rv = pkcs11.C_DestroyObject(session, pair['public'])
             if rv != 0:
