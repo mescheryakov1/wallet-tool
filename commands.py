@@ -379,19 +379,28 @@ def list_keys(pkcs11, wallet_id=0, pin=None):
                         attrs[attr_name] = bytes(buf)
             return attrs
 
-        objects = {}
+        objects = []
+
+        def add_object(kind, handle_attrs):
+            key_id = handle_attrs[1].get('CKA_ID')
+            for entry in objects:
+                if entry['key_id'] == key_id and kind not in entry:
+                    entry[kind] = handle_attrs
+                    return
+            objects.append({'key_id': key_id, kind: handle_attrs})
+
         for h in search_objects(CKO_PUBLIC_KEY):
             attrs = get_attributes(h)
-            objects.setdefault(attrs.get('CKA_ID'), {})['public'] = (h, attrs)
+            add_object('public', (h, attrs))
 
         if logged_in:
             for h in search_objects(CKO_PRIVATE_KEY):
                 attrs = get_attributes(h)
-                objects.setdefault(attrs.get('CKA_ID'), {})['private'] = (h, attrs)
+                add_object('private', (h, attrs))
 
         # If both public and private parts are found, copy label from private to
         # public key when the latter lacks one.
-        for pair in objects.values():
+        for pair in objects:
             if 'public' in pair and 'private' in pair:
                 pub_attrs = pair['public'][1]
                 priv_attrs = pair['private'][1]
@@ -399,10 +408,12 @@ def list_keys(pkcs11, wallet_id=0, pin=None):
                     pub_attrs['CKA_LABEL'] = priv_attrs['CKA_LABEL']
 
         print('Список ключей в кошельке:')
-        for idx, key_id in enumerate(
-            sorted(objects.keys(), key=lambda x: x or b''), start=1
-        ):
-            pair = objects[key_id]
+        sorted_pairs = sorted(
+            enumerate(objects),
+            key=lambda item: ((item[1]['key_id'] or b''), item[0]),
+        )
+        for idx, pair in enumerate(sorted_pairs, start=1):
+            pair = pair[1]
             key_type = None
             if 'public' in pair and 'CKA_KEY_TYPE' in pair['public'][1]:
                 key_type = pair['public'][1]['CKA_KEY_TYPE']

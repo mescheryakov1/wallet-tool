@@ -465,6 +465,118 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     assert logout_called == [True]
 
 
+def test_list_keys_prints_all_pairs_with_same_id(monkeypatch, capsys):
+    """Multiple key pairs sharing the same CKA_ID should all be displayed."""
+
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    current_class = None
+
+    def find_objects_init(session_handle, template_ptr, count):
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attr = arr[0]
+        val_ptr = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong))
+        nonlocal current_class
+        current_class = val_ptr.contents.value
+        return 0
+
+    pkcs11_mock.C_FindObjectsInit = find_objects_init
+
+    public_handles = iter([100, 102])
+    private_handles = iter([101, 103])
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        try:
+            if current_class == structs.CKO_PUBLIC_KEY:
+                handle = next(public_handles)
+            else:
+                handle = next(private_handles)
+        except StopIteration:
+            count_ptr._obj.value = 0
+            return 0
+
+        obj_ptr._obj.value = handle
+        count_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+
+    attr_map = {
+        100: {
+            structs.CKA_ID: b"shared",
+            structs.CKA_LABEL: b"pair",
+            structs.CKA_KEY_TYPE: structs.CKK_RSA,
+        },
+        101: {
+            structs.CKA_ID: b"shared",
+            structs.CKA_LABEL: b"pair",
+            structs.CKA_KEY_TYPE: structs.CKK_RSA,
+        },
+        102: {
+            structs.CKA_ID: b"shared",
+            structs.CKA_LABEL: b"pair",
+            structs.CKA_KEY_TYPE: structs.CKK_RSA,
+        },
+        103: {
+            structs.CKA_ID: b"shared",
+            structs.CKA_LABEL: b"pair",
+            structs.CKA_KEY_TYPE: structs.CKK_RSA,
+        },
+    }
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        handle = obj if isinstance(obj, int) else obj.value
+        data = attr_map.get(handle, {})
+
+        if not attr.pValue:
+            if attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            elif attr.type in data:
+                attr.ulValueLen = len(data[attr.type])
+            else:
+                attr.ulValueLen = 0
+            return 0
+
+        if attr.type == structs.CKA_KEY_TYPE:
+            val = ctypes.c_ulong(data.get(attr.type, 0))
+            ctypes.memmove(attr.pValue, ctypes.byref(val), ctypes.sizeof(val))
+        elif attr.type in data:
+            ctypes.memmove(attr.pValue, data[attr.type], len(data[attr.type]))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+
+    login_calls = []
+
+    def login(*args):
+        login_calls.append(args)
+        return 0
+
+    pkcs11_mock.C_Login = login
+    pkcs11_mock.C_Logout = lambda session: 0
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_keys(wallet_id=1, pin="0000")
+
+    out = capsys.readouterr().out
+    assert out.count("Ключ №") == 2
+    assert len(login_calls) == 1
+
+
 def test_change_pin_success(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
 
