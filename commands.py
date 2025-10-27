@@ -807,27 +807,38 @@ def delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
                 return None
             return bytes(buf)
 
-        objects = {}
+        pairs = []
+
+        def add_handle(kind, handle):
+            key_id = get_id(handle)
+            for entry in pairs:
+                if entry['key_id'] == key_id and kind not in entry:
+                    entry[kind] = handle
+                    return
+            pairs.append({'key_id': key_id, kind: handle})
+
         for h in search_objects(CKO_PUBLIC_KEY):
-            key_id = get_id(h)
-            objects.setdefault(key_id, {})['public'] = h
+            add_handle('public', h)
 
         for h in search_objects(CKO_PRIVATE_KEY):
-            key_id = get_id(h)
-            objects.setdefault(key_id, {})['private'] = h
+            add_handle('private', h)
 
-        ids = sorted(objects.keys(), key=lambda x: x or b'')
-        if key_number < 1 or key_number > len(ids):
+        sorted_pairs = sorted(
+            enumerate(pairs),
+            key=lambda item: ((item[1]['key_id'] or b''), item[0]),
+        )
+
+        if key_number < 1 or key_number > len(sorted_pairs):
             print('Ключ с таким номером не найден')
             return
 
-        pair = objects[ids[key_number - 1]]
+        pair = sorted_pairs[key_number - 1][1]
         if 'public' in pair:
-            rv = pkcs11.C_DestroyObject(session, pair['public'])
+            rv = pkcs11.C_DestroyObject(session, ctypes.c_ulong(pair['public']))
             if rv != 0:
                 print(f'Ошибка удаления публичного ключа: 0x{rv:08X}')
         if 'private' in pair:
-            rv = pkcs11.C_DestroyObject(session, pair['private'])
+            rv = pkcs11.C_DestroyObject(session, ctypes.c_ulong(pair['private']))
             if rv != 0:
                 print(f'Ошибка удаления закрытого ключа: 0x{rv:08X}')
     finally:

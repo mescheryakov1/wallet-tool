@@ -7,7 +7,7 @@ import pkcs11
 import pkcs11_structs as structs
 
 
-def setup_mock(monkeypatch, with_private):
+def setup_mock(monkeypatch, public_handles, private_handles=None, ids=None):
     pkcs11_mock = SimpleNamespace()
 
     def open_session(slot, flags, app, notify, session_ptr):
@@ -25,6 +25,13 @@ def setup_mock(monkeypatch, with_private):
     pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
 
     current_class = None
+    public_handles = list(public_handles)
+    private_handles = list(private_handles or [])
+    ids = ids if ids is not None else {
+        handle: b"\x01" for handle in [*public_handles, *private_handles]
+    }
+    pub_index = 0
+    priv_index = 0
 
     def find_objects_init(session_handle, template_ptr, count):
         arr_type = structs.CK_ATTRIBUTE * count
@@ -34,16 +41,22 @@ def setup_mock(monkeypatch, with_private):
         current_class = val_ptr.contents.value
         return 0
     pkcs11_mock.C_FindObjectsInit = find_objects_init
-
     def find_objects(session, obj_ptr, max_obj, count_ptr):
-        if current_class == structs.CKO_PUBLIC_KEY and not hasattr(find_objects, 'pub_done'):
-            obj_ptr._obj.value = 10
-            count_ptr._obj.value = 1
-            find_objects.pub_done = True
-        elif with_private and current_class == structs.CKO_PRIVATE_KEY and not hasattr(find_objects, 'priv_done'):
-            obj_ptr._obj.value = 11
-            count_ptr._obj.value = 1
-            find_objects.priv_done = True
+        nonlocal pub_index, priv_index
+        if current_class == structs.CKO_PUBLIC_KEY:
+            if pub_index < len(public_handles):
+                obj_ptr._obj.value = public_handles[pub_index]
+                count_ptr._obj.value = 1
+                pub_index += 1
+            else:
+                count_ptr._obj.value = 0
+        elif current_class == structs.CKO_PRIVATE_KEY:
+            if priv_index < len(private_handles):
+                obj_ptr._obj.value = private_handles[priv_index]
+                count_ptr._obj.value = 1
+                priv_index += 1
+            else:
+                count_ptr._obj.value = 0
         else:
             count_ptr._obj.value = 0
         return 0
@@ -51,22 +64,24 @@ def setup_mock(monkeypatch, with_private):
 
     def get_attribute_value(session, obj, attr_ptr, count):
         attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
-        if not attr.pValue:
-            if attr.type == structs.CKA_ID:
-                attr.ulValueLen = 1
-            else:
-                attr.ulValueLen = 0
-            return 0
         if attr.type == structs.CKA_ID:
-            b = (ctypes.c_ubyte * 1)(1)
-            ctypes.memmove(attr.pValue, b, 1)
+            handle = obj.value
+            value = ids.get(handle)
+            if not attr.pValue:
+                attr.ulValueLen = len(value) if value is not None else 0
+                return 0
+            if value is not None:
+                buf = (ctypes.c_ubyte * len(value)).from_buffer_copy(value)
+                ctypes.memmove(attr.pValue, buf, len(value))
+            return 0
+        attr.ulValueLen = 0
         return 0
     pkcs11_mock.C_GetAttributeValue = get_attribute_value
 
     destroyed = []
 
     def destroy_object(session, handle):
-        destroyed.append(handle)
+        destroyed.append(getattr(handle, 'value', handle))
         return 0
     pkcs11_mock.C_DestroyObject = destroy_object
 
@@ -79,7 +94,11 @@ def setup_mock(monkeypatch, with_private):
 
 
 def test_delete_pair_with_private(monkeypatch):
-    destroyed, login_args, logout_called = setup_mock(monkeypatch, True)
+    destroyed, login_args, logout_called = setup_mock(
+        monkeypatch,
+        public_handles=[10],
+        private_handles=[11],
+    )
 
     commands.delete_key_pair(wallet_id=1, pin='0000', key_number=1)
 
@@ -89,7 +108,11 @@ def test_delete_pair_with_private(monkeypatch):
 
 
 def test_delete_pair_requires_pin(monkeypatch, capsys):
-    destroyed, login_args, logout_called = setup_mock(monkeypatch, False)
+    destroyed, login_args, logout_called = setup_mock(
+        monkeypatch,
+        public_handles=[10],
+        private_handles=[],
+    )
 
     commands.delete_key_pair(wallet_id=1, pin=None, key_number=1)
 
@@ -101,7 +124,11 @@ def test_delete_pair_requires_pin(monkeypatch, capsys):
 
 
 def test_delete_pair_requires_key_number(monkeypatch, capsys):
-    destroyed, login_args, logout_called = setup_mock(monkeypatch, False)
+    destroyed, login_args, logout_called = setup_mock(
+        monkeypatch,
+        public_handles=[10],
+        private_handles=[],
+    )
 
     commands.delete_key_pair(wallet_id=1, pin='0000')
 
@@ -110,4 +137,25 @@ def test_delete_pair_requires_key_number(monkeypatch, capsys):
     assert destroyed == []
     assert login_args == []
     # After missing key-number the function should still logout
+    assert logout_called == [True]
+
+
+def test_delete_pair_with_same_id_enumeration(monkeypatch):
+    destroyed, login_args, logout_called = setup_mock(
+        monkeypatch,
+        public_handles=[10, 20, 30],
+        private_handles=[11, 21, 31],
+        ids={
+            10: None,
+            11: None,
+            20: None,
+            21: None,
+            30: None,
+            31: None,
+        },
+    )
+
+    commands.delete_key_pair(wallet_id=1, pin='0000', key_number=2)
+
+    assert destroyed == [20, 21]
     assert logout_called == [True]
