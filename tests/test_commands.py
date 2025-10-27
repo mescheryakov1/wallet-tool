@@ -8,7 +8,7 @@ import pkcs11
 import pkcs11_structs as structs
 
 
-def test_list_objects_public_only_no_pin(monkeypatch, capsys):
+def test_list_keys_public_only_no_pin(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
 
     def open_session(slot, flags, app, notify, session_ptr):
@@ -49,7 +49,7 @@ def test_list_objects_public_only_no_pin(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin=None)
+    commands.list_keys(wallet_id=1, pin=None)
 
     out = capsys.readouterr().out
     assert "Закрытые ключи не отображаются" in out
@@ -88,7 +88,7 @@ def test_library_info_prints_wallet_description(monkeypatch, capsys):
     assert expected_desc in out
 
 
-def test_list_objects_with_pin_search_templates(monkeypatch):
+def test_list_keys_with_pin_search_templates(monkeypatch):
     pkcs11_mock = SimpleNamespace()
 
     def open_session(slot, flags, app, notify, session_ptr):
@@ -128,7 +128,7 @@ def test_list_objects_with_pin_search_templates(monkeypatch):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin="0000")
+    commands.list_keys(wallet_id=1, pin="0000")
 
     assert len(login_args) == 1
     assert login_args[0][1] == structs.CKU_USER
@@ -238,7 +238,7 @@ def test_show_wallet_info_no_token(monkeypatch, capsys):
     assert "Нет подключенного кошелька" in out
 
 
-def test_list_objects_no_wallet(monkeypatch, capsys):
+def test_list_keys_no_wallet(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
     pkcs11_mock.C_OpenSession = lambda *args: structs.CKR_TOKEN_NOT_PRESENT
 
@@ -247,7 +247,7 @@ def test_list_objects_no_wallet(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin="0000")
+    commands.list_keys(wallet_id=1, pin="0000")
 
     captured = capsys.readouterr()
     assert "Нет подключенного кошелька" in captured.out
@@ -276,7 +276,7 @@ def test_format_attribute_value_text_truncate():
     assert out == "a" * 30 + "..."
 
 
-def test_list_objects_prints_key_type(monkeypatch, capsys):
+def test_list_keys_prints_key_type(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
 
     def open_session(slot, flags, app, notify, session_ptr):
@@ -325,13 +325,13 @@ def test_list_objects_prints_key_type(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin=None)
+    commands.list_keys(wallet_id=1, pin=None)
 
     out = capsys.readouterr().out
     assert "RSA" in out
 
 
-def test_list_objects_prints_ec_key_type(monkeypatch, capsys):
+def test_list_keys_prints_ec_key_type(monkeypatch, capsys):
     """Simulate object with EC key type and expect ECDSA description."""
     pkcs11_mock = SimpleNamespace()
 
@@ -375,7 +375,7 @@ def test_list_objects_prints_ec_key_type(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin=None)
+    commands.list_keys(wallet_id=1, pin=None)
 
     out = capsys.readouterr().out
     assert "ECDSA" in out
@@ -456,7 +456,7 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
     monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
 
-    commands.list_objects(wallet_id=1, pin="0000")
+    commands.list_keys(wallet_id=1, pin="0000")
 
     out = capsys.readouterr().out.splitlines()
     pub_index = out.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")

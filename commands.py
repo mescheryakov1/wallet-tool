@@ -299,7 +299,7 @@ def list_wallets(pkcs11):
             print(f'  Слот {slot_id} не содержит кошелька.')
 
 @pkcs11_command
-def list_objects(pkcs11, wallet_id=0, pin=None):
+def list_keys(pkcs11, wallet_id=0, pin=None):
     """Выводит список ключей. Если PIN не задан, показываются только публичные ключи."""
     define_pkcs11_functions(pkcs11)
 

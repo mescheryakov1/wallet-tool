@@ -3,7 +3,8 @@ Example app to control the wallet. Supported commands include listing slots,
 resetting the token, generating and deleting key pairs, as well as changing the
 user PIN via PKCS#11. Commands that operate on a specific wallet accept the
 ``--wallet-id`` option; when omitted, wallet identifier ``0`` is used. Unless
-stated otherwise, examples use the default user PIN ``12345678``.
+stated otherwise, examples use the factory user PIN ``12345678`` passed via the
+``--pin`` option when a command requires authentication.
 When generating a key pair both ``--key-id`` and ``--key-label`` must be
 specified.
 
