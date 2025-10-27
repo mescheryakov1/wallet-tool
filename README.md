@@ -11,7 +11,7 @@ specified.
 ```
 python main.py --generate-key ed25519 --wallet-id 0 --pin 12345678 --key-id myid --key-label mylabel
 python main.py --generate-key gost --wallet-id 0 --pin 12345678 --key-id myid --key-label mylabel
-python main.py --delete-key 1 --wallet-id 0 --pin 12345678
+python main.py --delete-key --key-number 1 --wallet-id 0 --pin 12345678
 python main.py --change-pin --wallet-id 0 --pin 12345678 --new-pin 1234
 ```
 GOST key generation also requires ``--key-id`` and ``--key-label``.

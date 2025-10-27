@@ -52,8 +52,16 @@ def main():
                         help='CKA_ID для создаваемой ключевой пары')
     parser.add_argument('--key-label', type=str, default='',
                         help='CKA_LABEL для создаваемой ключевой пары')
-    parser.add_argument('--delete-key', type=int,
-                        help='Удалить ключевую пару по номеру')
+    parser.add_argument(
+        '--delete-key',
+        action='store_true',
+        help='Удалить ключевую пару; требуется параметр --key-number',
+    )
+    parser.add_argument(
+        '--key-number',
+        type=int,
+        help='Номер ключа из списка (key-number) для удаления',
+    )
     parser.add_argument('--change-pin', action='store_true',
                         help='Сменить пользовательский PIN-код')
     parser.add_argument('--new-pin', type=str, default=None,
@@ -86,8 +94,11 @@ def main():
                 cka_id=args.key_id,
                 cka_label=args.key_label,
             )
-    elif args.delete_key is not None:
-        delete_key_pair(args.wallet_id, args.pin, args.delete_key)
+    elif args.delete_key:
+        if args.key_number is None:
+            print('Для удаления необходимо указать параметр --key-number', file=sys.stderr)
+        else:
+            delete_key_pair(args.wallet_id, args.pin, key_number=args.key_number)
     elif args.change_pin:
         change_pin(args.wallet_id, args.pin, args.new_pin)
     else:
