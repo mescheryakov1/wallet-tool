@@ -4,7 +4,7 @@ from commands import (
     library_info,
     list_slots,
     list_wallets,
-    list_objects,
+    list_keys,
     generate_key_pair,
     delete_key_pair,
     change_pin,
@@ -44,8 +44,8 @@ def main():
                         help='Показать список кошельков (токенов)')
     parser.add_argument('--show-wallet-info', action='store_true',
                         help='Показать подробную информацию о кошельке')
-    parser.add_argument('--list-objects', action='store_true',
-                        help='Показать список объектов в кошельке')
+    parser.add_argument('--list-keys', action='store_true',
+                        help='Показать список ключей в кошельке')
     parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
                         help='Сгенерировать ключевую пару указанного типа')
     parser.add_argument('--key-id', type=str, default='',
@@ -60,8 +60,8 @@ def main():
                         help='Новый PIN-код для смены')
     parser.add_argument('--wallet-id', type=int, default=0,
                         help='Идентификатор кошелька для выполнения команды (по умолчанию 0)')
-    parser.add_argument('--pin', type=str, default='12345678',
-                        help='PIN-код для выполнения команды (по умолчанию 12345678)')
+    parser.add_argument('--pin', type=str, default=None,
+                        help='PIN-код для выполнения команды (не передаётся по умолчанию)')
 
     args = parser.parse_args()
 
@@ -73,8 +73,8 @@ def main():
         list_wallets()
     elif args.show_wallet_info:
         show_wallet_info(args.wallet_id)
-    elif args.list_objects:
-        list_objects(args.wallet_id, args.pin)
+    elif args.list_keys:
+        list_keys(args.wallet_id, args.pin)
     elif args.generate_key:
         if not args.key_id or not args.key_label:
             print('Необходимо указать --key-id и --key-label для генерации ключа', file=sys.stderr)
