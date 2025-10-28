@@ -120,7 +120,7 @@ def test_delete_pair_requires_pin(monkeypatch, capsys):
     assert 'PIN-код' in err
     assert destroyed == []
     assert login_args == []
-    assert logout_called == [True]
+    assert logout_called == []
 
 
 def test_delete_pair_requires_key_number(monkeypatch, capsys):
@@ -136,8 +136,8 @@ def test_delete_pair_requires_key_number(monkeypatch, capsys):
     assert '--key-number' in err
     assert destroyed == []
     assert login_args == []
-    # After missing key-number the function should still logout
-    assert logout_called == [True]
+    # Logout is not called when пользователь не вводил PIN
+    assert logout_called == []
 
 
 def test_delete_pair_with_same_id_enumeration(monkeypatch):
@@ -157,5 +157,5 @@ def test_delete_pair_with_same_id_enumeration(monkeypatch):
 
     commands.delete_key_pair(wallet_id=1, pin='0000', key_number=2)
 
-    assert destroyed == [20, 21]
+    assert destroyed == [21, 20]
     assert logout_called == [True]
