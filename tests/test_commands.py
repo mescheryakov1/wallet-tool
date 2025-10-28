@@ -770,7 +770,7 @@ def test_import_keys_creates_object(monkeypatch, capsys):
     assert attrs['derive'] == 1
     assert attrs['value'] == expected_master
     assert attrs['chaincode'] == expected_chain
-    assert attrs['ec_params'] == commands.SECP256K1_OID_DER
+    assert attrs['ec_params'] == commands.SECP256R1_OID_DER
     assert attrs['id'] == b'root'
     assert attrs['label'] == b'Master'
 
