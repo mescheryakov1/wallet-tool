@@ -9,6 +9,7 @@ from commands import (
     delete_key_pair,
     change_pin,
     show_wallet_info,
+    import_keys,
 )
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
@@ -46,6 +47,11 @@ def main():
                         help='Показать подробную информацию о кошельке')
     parser.add_argument('--list-keys', action='store_true',
                         help='Показать список ключей в кошельке')
+    parser.add_argument(
+        '--import-keys',
+        type=str,
+        help='Импортировать master node из мнемонической фразы',
+    )
     parser.add_argument('--generate-key', choices=['secp256', 'ed25519', 'gost', 'rsa1024', 'rsa2048'],
                         help='Сгенерировать ключевую пару указанного типа')
     parser.add_argument('--key-id', type=str, default='',
@@ -88,6 +94,14 @@ def main():
         show_wallet_info(args.wallet_id)
     elif args.list_keys:
         list_keys(args.wallet_id, args.pin)
+    elif args.import_keys is not None:
+        import_keys(
+            args.wallet_id,
+            args.pin,
+            args.import_keys,
+            cka_id=args.key_id,
+            cka_label=args.key_label,
+        )
     elif args.generate_key:
         if not args.key_id or not args.key_label:
             print('Необходимо указать --key-id и --key-label для генерации ключа', file=sys.stderr)

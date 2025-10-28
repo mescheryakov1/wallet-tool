@@ -69,9 +69,13 @@ def make_pkcs11_mock(captured):
                 elif attr.type == structs.CKA_KEY_TYPE:
                     val = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong)).contents.value
                     captured[f'{prefix}_{attr.type}'] = val
-                elif attr.type in (structs.CKA_ID, structs.CKA_LABEL,
-                                   structs.CKA_GOSTR3410_PARAMS,
-                                   structs.CKA_GOSTR3411_PARAMS):
+                elif attr.type in (
+                    structs.CKA_ID,
+                    structs.CKA_LABEL,
+                    structs.CKA_GOSTR3410_PARAMS,
+                    structs.CKA_GOSTR3411_PARAMS,
+                    structs.CKA_EC_PARAMS,
+                ):
                     buf = (ctypes.c_ubyte * attr.ulValueLen).from_address(attr.pValue)
                     captured[f'{prefix}_{attr.type}'] = bytes(buf)
 
@@ -178,6 +182,7 @@ def test_generate_secp256_default(monkeypatch):
     assert 'priv_%d' % structs.CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE not in captured
     assert captured['pub_%d' % structs.CKA_KEY_TYPE] == structs.CKK_EC
     assert captured['priv_%d' % structs.CKA_KEY_TYPE] == structs.CKK_EC
+    assert captured['pub_%d' % structs.CKA_EC_PARAMS] == commands.SECP256R1_OID_DER
     assert captured['logout_called'] == 1
 
 
@@ -205,6 +210,7 @@ def test_generate_secp256_with_mnemonic(monkeypatch, capsys):
     )
     assert captured['pub_%d' % structs.CKA_KEY_TYPE] == structs.CKK_VENDOR_BIP32
     assert captured['priv_%d' % structs.CKA_KEY_TYPE] == structs.CKK_VENDOR_BIP32
+    assert captured['pub_%d' % structs.CKA_EC_PARAMS] == commands.SECP256R1_OID_DER
     assert captured['mnemonic_size_requests'] == [len(captured['sample_mnemonic'])]
     assert captured['mnemonic_value_requests'] == 1
     assert captured['mnemonic_locked_value'] == 0

@@ -1,7 +1,12 @@
 import ctypes
-from types import SimpleNamespace
+import hashlib
+import hmac
 import os
 import sys
+import unicodedata
+from types import SimpleNamespace
+
+import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import commands
 import pkcs11
@@ -663,3 +668,146 @@ def test_change_pin_missing_new_pin(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Необходимо указать текущий и новый PIN-коды" in captured.err
     assert close_called == [111]
+
+
+def test_import_keys_creates_object(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 555
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    login_calls = []
+
+    def login(session, user_type, pin, pin_len):
+        login_calls.append((user_type, pin, pin_len))
+        return 0
+
+    pkcs11_mock.C_Login = login
+
+    logout_called = []
+    pkcs11_mock.C_Logout = (
+        lambda session: logout_called.append(session if isinstance(session, int) else session.value)
+        or 0
+    )
+
+    close_called = []
+    pkcs11_mock.C_CloseSession = (
+        lambda session: close_called.append(session if isinstance(session, int) else session.value)
+        or 0
+    )
+
+    captured = {}
+
+    def create_object(session, template_ptr, count, handle_ptr):
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attrs = {}
+        for attr in arr:
+            if attr.type == structs.CKA_CLASS:
+                attrs['class'] = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong)).contents.value
+            elif attr.type == structs.CKA_KEY_TYPE:
+                attrs['key_type'] = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong)).contents.value
+            elif attr.type == structs.CKA_TOKEN:
+                attrs['token'] = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ubyte)).contents.value
+            elif attr.type == structs.CKA_PRIVATE:
+                attrs['private'] = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ubyte)).contents.value
+            elif attr.type == structs.CKA_DERIVE:
+                attrs['derive'] = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ubyte)).contents.value
+            elif attr.type == structs.CKA_VALUE:
+                attrs['value'] = ctypes.string_at(attr.pValue, attr.ulValueLen)
+            elif attr.type == structs.CKA_VENDOR_BIP32_CHAINCODE:
+                attrs['chaincode'] = ctypes.string_at(attr.pValue, attr.ulValueLen)
+            elif attr.type == structs.CKA_EC_PARAMS:
+                attrs['ec_params'] = ctypes.string_at(attr.pValue, attr.ulValueLen)
+            elif attr.type == structs.CKA_ID:
+                attrs['id'] = ctypes.string_at(attr.pValue, attr.ulValueLen)
+            elif attr.type == structs.CKA_LABEL:
+                attrs['label'] = ctypes.string_at(attr.pValue, attr.ulValueLen)
+        captured['attributes'] = attrs
+        handle_ptr._obj.value = 777
+        return 0
+
+    pkcs11_mock.C_CreateObject = create_object
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    raw_mnemonic = (
+        "  abandon   abandon  abandon   abandon abandon abandon "
+        "abandon   abandon abandon abandon abandon about  "
+    )
+    sanitized = " ".join(raw_mnemonic.strip().split())
+    normalized = unicodedata.normalize("NFKD", sanitized)
+    seed = hashlib.pbkdf2_hmac(
+        'sha512', normalized.encode('utf-8'), b'mnemonic', 2048, dklen=64
+    )
+    digest = hmac.new(b'Bitcoin seed', seed, hashlib.sha512).digest()
+    expected_master = digest[:32]
+    expected_chain = digest[32:]
+
+    commands.import_keys(
+        wallet_id=7,
+        pin="1234",
+        mnemonic=raw_mnemonic,
+        cka_id="root",
+        cka_label="Master",
+    )
+
+    result = capsys.readouterr()
+    assert 'Мастер-ключ успешно импортирован.' in result.out
+    assert result.err == ''
+
+    attrs = captured['attributes']
+    assert attrs['class'] == structs.CKO_PRIVATE_KEY
+    assert attrs['key_type'] == structs.CKK_VENDOR_BIP32
+    assert attrs['token'] == 1
+    assert attrs['private'] == 1
+    assert attrs['derive'] == 1
+    assert attrs['value'] == expected_master
+    assert attrs['chaincode'] == expected_chain
+    assert attrs['ec_params'] == commands.SECP256R1_OID_DER
+    assert attrs['id'] == b'root'
+    assert attrs['label'] == b'Master'
+
+    assert login_calls == [(structs.CKU_USER, b"1234", 4)]
+    assert logout_called == [555]
+    assert close_called == [555]
+
+
+def test_import_keys_invalid_word_count(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 42
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+    pkcs11_mock.C_Login = lambda *args: pytest.fail('C_Login should not be called')
+    pkcs11_mock.C_CreateObject = lambda *args: pytest.fail('C_CreateObject should not be called')
+
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
+
+    close_called = []
+    pkcs11_mock.C_CloseSession = (
+        lambda session: close_called.append(session if isinstance(session, int) else session.value)
+        or 0
+    )
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.import_keys(wallet_id=0, pin="0000", mnemonic="one two")
+
+    captured = capsys.readouterr()
+    assert 'Мнемоническая фраза должна содержать' in captured.err
+    assert captured.out == ''
+    assert logout_called == []
+    assert close_called == [42]
