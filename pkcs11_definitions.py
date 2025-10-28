@@ -68,6 +68,15 @@ def define_pkcs11_functions(pkcs11):
     ]
     pkcs11.C_GetAttributeValue.restype = ctypes.c_ulong
 
+    # C_SetAttributeValue
+    pkcs11.C_SetAttributeValue.argtypes = [
+        ctypes.c_ulong,  # CK_SESSION_HANDLE
+        ctypes.c_ulong,  # CK_OBJECT_HANDLE
+        ctypes.POINTER(CK_ATTRIBUTE),  # CK_ATTRIBUTE_PTR
+        ctypes.c_ulong,  # ulCount
+    ]
+    pkcs11.C_SetAttributeValue.restype = ctypes.c_ulong
+
     # C_GenerateKeyPair
     from pkcs11_structs import CK_MECHANISM
     pkcs11.C_GenerateKeyPair.argtypes = [

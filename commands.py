@@ -32,13 +32,17 @@ from pkcs11_structs import (
     CKM_EC_KEY_PAIR_GEN,
     CKM_EC_EDWARDS_KEY_PAIR_GEN,
     CKM_GOSTR3410_KEY_PAIR_GEN,
+    CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN,
     CK_MECHANISM,
     CKU_USER,
+    CK_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN_PARAMS,
     TOKEN_FLAGS_USER_PIN_NOT_DEFAULT,
     TOKEN_FLAGS_SUPPORT_JOURNAL,
     TOKEN_FLAGS_USER_PIN_UTF8,
     TOKEN_FLAGS_FW_CHECKSUM_UNAVAILIBLE,
     TOKEN_FLAGS_FW_CHECKSUM_INVALID,
+    CKA_VENDOR_BIP39_MNEMONIC,
+    CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -511,7 +515,15 @@ def change_pin(pkcs11, wallet_id=0, old_pin=None, new_pin=None):
 
 
 @pkcs11_command
-def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", cka_label=""):
+def generate_key_pair(
+    pkcs11,
+    wallet_id=0,
+    pin=None,
+    algorithm=None,
+    cka_id="",
+    cka_label="",
+    get_mnemonic=False,
+):
     """Generate key pair on token.
 
     Parameters
@@ -546,6 +558,13 @@ def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", 
         if not pin:
             print(
                 'Необходимо указать PIN-код для генерации ключа',
+                file=sys.stderr,
+            )
+            return
+
+        if get_mnemonic and algorithm != 'secp256':
+            print(
+                '--get-mnemonic доступен только для алгоритма secp256',
                 file=sys.stderr,
             )
             return
@@ -653,7 +672,34 @@ def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", 
                 )
             )
         elif algorithm == 'secp256':
-            mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
+            if get_mnemonic:
+                mechanism.mechanism = CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN
+                empty_passphrase = (ctypes.c_ubyte * 1)()
+                buffers.append(empty_passphrase)
+                mech_params = CK_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN_PARAMS()
+                mech_params.pPassphrase = ctypes.cast(
+                    empty_passphrase, ctypes.c_void_p
+                )
+                mech_params.ulPassphraseLen = 0
+                mech_params.ulMnemonicLength = 24
+                buffers.append(mech_params)
+                mechanism.pParameter = ctypes.cast(
+                    ctypes.pointer(mech_params), ctypes.c_void_p
+                )
+                mechanism.ulParameterLen = ctypes.sizeof(mech_params)
+                priv_attrs.append(
+                    CK_ATTRIBUTE(
+                        type=CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE,
+                        pValue=ctypes.cast(
+                            ctypes.pointer(true_val), ctypes.c_void_p
+                        ),
+                        ulValueLen=1,
+                    )
+                )
+            else:
+                mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
+                mechanism.pParameter = None
+                mechanism.ulParameterLen = 0
             oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07)
             pub_attrs.append(
                 CK_ATTRIBUTE(
@@ -732,6 +778,78 @@ def generate_key_pair(pkcs11, wallet_id=0, pin=None, algorithm=None, cka_id="", 
             print(f'C_GenerateKeyPair вернула ошибку: 0x{rv:08X}')
         else:
             print('Ключевая пара успешно сгенерирована.')
+            if get_mnemonic:
+                mnemonic_attr = CK_ATTRIBUTE(
+                    type=CKA_VENDOR_BIP39_MNEMONIC,
+                    pValue=None,
+                    ulValueLen=0,
+                )
+                rv_attr = pkcs11.C_GetAttributeValue(
+                    session,
+                    priv_handle.value,
+                    ctypes.byref(mnemonic_attr),
+                    1,
+                )
+                if rv_attr != 0:
+                    print(
+                        f'Не удалось получить длину мнемоники: 0x{rv_attr:08X}',
+                        file=sys.stderr,
+                    )
+                elif mnemonic_attr.ulValueLen == 0:
+                    print(
+                        'Мнемоническая фраза не возвращена токеном.',
+                        file=sys.stderr,
+                    )
+                else:
+                    mnemonic_buf = (ctypes.c_char * mnemonic_attr.ulValueLen)()
+                    mnemonic_attr.pValue = ctypes.cast(
+                        mnemonic_buf, ctypes.c_void_p
+                    )
+                    rv_attr = pkcs11.C_GetAttributeValue(
+                        session,
+                        priv_handle.value,
+                        ctypes.byref(mnemonic_attr),
+                        1,
+                    )
+                    if rv_attr != 0:
+                        print(
+                            f'Не удалось получить мнемонику: 0x{rv_attr:08X}',
+                            file=sys.stderr,
+                        )
+                    else:
+                        mnemonic_bytes = ctypes.string_at(
+                            mnemonic_attr.pValue, mnemonic_attr.ulValueLen
+                        )
+                        mnemonic_text = mnemonic_bytes.decode('utf-8', errors='replace')
+                        print("\n=============================================")
+                        print('ЗАПИШИТЕ МНЕМОНИЧЕСКУЮ ФРАЗУ И СОХРАНИТЕ ЕЁ.')
+                        print('ПОТЕРЯВ ФРАЗУ ВЫ НЕВОССТАНОВИМО ПОТЕРЯЕТЕ ДОСТУП К КЛЮЧАМ.\n')
+                        print(mnemonic_text)
+                        print('=============================================\n')
+
+                        ck_false_local = ctypes.c_ubyte(0)
+                        lock_attr = CK_ATTRIBUTE(
+                            type=CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE,
+                            pValue=ctypes.cast(
+                                ctypes.pointer(ck_false_local), ctypes.c_void_p
+                            ),
+                            ulValueLen=1,
+                        )
+                        rv_lock = pkcs11.C_SetAttributeValue(
+                            session,
+                            priv_handle.value,
+                            ctypes.byref(lock_attr),
+                            1,
+                        )
+                        if rv_lock != 0:
+                            print(
+                                f'Warning: не удалось заблокировать мнемонику, 0x{rv_lock:08X}',
+                                file=sys.stderr,
+                            )
+
+                        ctypes.memset(
+                            mnemonic_attr.pValue, 0, mnemonic_attr.ulValueLen
+                        )
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
