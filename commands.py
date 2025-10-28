@@ -21,6 +21,7 @@ from pkcs11_structs import (
     CKK_EC_EDWARDS,
     CKK_EC_MONTGOMERY,
     CKK_GOSTR3410,
+    CKK_VENDOR_BIP32,
     CKA_TOKEN,
     CKA_PRIVATE,
     CKA_MODULUS_BITS,
@@ -708,6 +709,27 @@ def generate_key_pair(
                     ulValueLen=10,
                 )
             )
+            key_type_pub = ctypes.c_ulong(CKK_EC)
+            key_type_priv = ctypes.c_ulong(CKK_EC)
+            buffers.extend([key_type_pub, key_type_priv])
+            pub_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_KEY_TYPE,
+                    pValue=ctypes.cast(
+                        ctypes.pointer(key_type_pub), ctypes.c_void_p
+                    ),
+                    ulValueLen=ctypes.sizeof(key_type_pub),
+                )
+            )
+            priv_attrs.append(
+                CK_ATTRIBUTE(
+                    type=CKA_KEY_TYPE,
+                    pValue=ctypes.cast(
+                        ctypes.pointer(key_type_priv), ctypes.c_void_p
+                    ),
+                    ulValueLen=ctypes.sizeof(key_type_priv),
+                )
+            )
         elif algorithm == 'ed25519':
             mechanism.mechanism = CKM_EC_EDWARDS_KEY_PAIR_GEN
             oid = (ctypes.c_ubyte * 5)(0x06, 0x03, 0x2B, 0x65, 0x70)
@@ -757,6 +779,17 @@ def generate_key_pair(
         else:
             print('Неверный тип ключа')
             return
+
+        if get_mnemonic and algorithm == 'secp256':
+            bip32_key_type = ctypes.c_ulong(CKK_VENDOR_BIP32)
+            buffers.append(bip32_key_type)
+            for attr_list in (pub_attrs, priv_attrs):
+                for attr in attr_list:
+                    if attr.type == CKA_KEY_TYPE:
+                        attr.pValue = ctypes.cast(
+                            ctypes.pointer(bip32_key_type), ctypes.c_void_p
+                        )
+                        attr.ulValueLen = ctypes.sizeof(bip32_key_type)
 
         pub_template = (CK_ATTRIBUTE * len(pub_attrs))(*pub_attrs)
         priv_template = (CK_ATTRIBUTE * len(priv_attrs))(*priv_attrs)
