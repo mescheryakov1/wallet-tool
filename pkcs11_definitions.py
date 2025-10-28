@@ -96,6 +96,15 @@ def define_pkcs11_functions(pkcs11):
     ]
     pkcs11.C_DestroyObject.restype = ctypes.c_ulong
 
+    # C_CreateObject
+    pkcs11.C_CreateObject.argtypes = [
+        ctypes.c_ulong,  # CK_SESSION_HANDLE
+        ctypes.POINTER(CK_ATTRIBUTE),  # CK_ATTRIBUTE_PTR
+        ctypes.c_ulong,  # ulCount
+        ctypes.POINTER(ctypes.c_ulong),  # CK_OBJECT_HANDLE_PTR
+    ]
+    pkcs11.C_CreateObject.restype = ctypes.c_ulong
+
     # C_CloseSession
     pkcs11.C_CloseSession.argtypes = [ctypes.c_ulong]
     pkcs11.C_CloseSession.restype = ctypes.c_ulong

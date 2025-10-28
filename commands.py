@@ -1,5 +1,8 @@
 import ctypes
+import hashlib
+import hmac
 import sys
+import unicodedata
 from pkcs11 import pkcs11_command
 from pkcs11_structs import (
     CK_INFO,
@@ -24,6 +27,7 @@ from pkcs11_structs import (
     CKK_VENDOR_BIP32,
     CKA_TOKEN,
     CKA_PRIVATE,
+    CKA_DERIVE,
     CKA_MODULUS_BITS,
     CKA_PUBLIC_EXPONENT,
     CKA_EC_PARAMS,
@@ -44,6 +48,7 @@ from pkcs11_structs import (
     TOKEN_FLAGS_FW_CHECKSUM_INVALID,
     CKA_VENDOR_BIP39_MNEMONIC,
     CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE,
+    CKA_VENDOR_BIP32_CHAINCODE,
 )
 from pkcs11_definitions import define_pkcs11_functions
 
@@ -54,6 +59,8 @@ key_type_description = {
     CKK_EC_MONTGOMERY: "EdDSA (solana, ton и т.д.)",
     CKK_GOSTR3410: "ГОСТ 34.10-2012",
 }
+
+SECP256K1_OID_DER = bytes((0x06, 0x05, 0x2B, 0x81, 0x04, 0x00, 0x0A))
 
 
 def format_attribute_value(value: bytes, mode: str) -> str:
@@ -115,6 +122,13 @@ def _prepare_value(value) -> str:
     if isinstance(value, str):
         return value if value else "—"
     return str(value)
+
+
+def _zero_bytearray(buffer) -> None:
+    if buffer is None:
+        return
+    for idx in range(len(buffer)):
+        buffer[idx] = 0
 
 
 def _print_table(title: str, rows, headers=("Параметр", "Значение")) -> None:
@@ -513,6 +527,188 @@ def change_pin(pkcs11, wallet_id=0, old_pin=None, new_pin=None):
         if logged_in:
             pkcs11.C_Logout(session)
         pkcs11.C_CloseSession(session)
+
+
+@pkcs11_command
+def import_keys(
+    pkcs11,
+    wallet_id=0,
+    pin=None,
+    mnemonic=None,
+    cka_id="",
+    cka_label="",
+):
+    """Импортировать master node HD-дерева по мнемонической фразе."""
+
+    define_pkcs11_functions(pkcs11)
+
+    session = ctypes.c_ulong()
+    rv = pkcs11.C_OpenSession(
+        wallet_id, CKF_SERIAL_SESSION | CKF_RW_SESSION, None, None, ctypes.byref(session)
+    )
+    if rv == CKR_TOKEN_NOT_PRESENT:
+        print('Нет подключенного кошелька, подключите кошелек')
+        return
+    if rv != 0:
+        print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+        return
+
+    mnemonic_bytes = None
+    seed = None
+    hmac_result = None
+    master_priv = None
+    chain_code = None
+    master_priv_buf = None
+    chain_code_buf = None
+    ec_params_buf = None
+    id_buf = None
+    label_buf = None
+    logged_in = False
+
+    try:
+        if not pin:
+            print('Необходимо указать PIN-код для импорта ключей', file=sys.stderr)
+            return
+        if mnemonic is None:
+            print('Необходимо указать мнемоническую фразу для импорта ключей', file=sys.stderr)
+            return
+
+        sanitized = " ".join(mnemonic.strip().split())
+        if not sanitized:
+            print('Мнемоническая фраза не должна быть пустой', file=sys.stderr)
+            return
+
+        words = sanitized.split(" ")
+        if len(words) not in {12, 15, 18, 21, 24}:
+            print(
+                'Мнемоническая фраза должна содержать 12, 15, 18, 21 или 24 слова',
+                file=sys.stderr,
+            )
+            return
+
+        normalized = unicodedata.normalize("NFKD", sanitized)
+        mnemonic_bytes = bytearray(normalized.encode('utf-8'))
+
+        seed = bytearray(
+            hashlib.pbkdf2_hmac('sha512', mnemonic_bytes, b'mnemonic', 2048, dklen=64)
+        )
+        hmac_result = bytearray(hmac.new(b'Bitcoin seed', seed, hashlib.sha512).digest())
+        master_priv = bytearray(hmac_result[:32])
+        chain_code = bytearray(hmac_result[32:])
+
+        pin_bytes = pin.encode('utf-8')
+        rv = pkcs11.C_Login(session, CKU_USER, pin_bytes, len(pin_bytes))
+        if rv != 0:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            return
+        logged_in = True
+
+        ck_true = ctypes.c_ubyte(1)
+        cko_private_key = ctypes.c_ulong(CKO_PRIVATE_KEY)
+        key_type = ctypes.c_ulong(CKK_VENDOR_BIP32)
+        master_priv_buf = (ctypes.c_ubyte * len(master_priv))(*master_priv)
+        chain_code_buf = (ctypes.c_ubyte * len(chain_code))(*chain_code)
+        ec_params_buf = (ctypes.c_ubyte * len(SECP256K1_OID_DER))(*SECP256K1_OID_DER)
+
+        attributes = [
+            CK_ATTRIBUTE(
+                type=CKA_CLASS,
+                pValue=ctypes.cast(ctypes.pointer(cko_private_key), ctypes.c_void_p),
+                ulValueLen=ctypes.sizeof(cko_private_key),
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_KEY_TYPE,
+                pValue=ctypes.cast(ctypes.pointer(key_type), ctypes.c_void_p),
+                ulValueLen=ctypes.sizeof(key_type),
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_VALUE,
+                pValue=ctypes.cast(master_priv_buf, ctypes.c_void_p),
+                ulValueLen=len(master_priv),
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_VENDOR_BIP32_CHAINCODE,
+                pValue=ctypes.cast(chain_code_buf, ctypes.c_void_p),
+                ulValueLen=len(chain_code),
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_TOKEN,
+                pValue=ctypes.cast(ctypes.pointer(ck_true), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_PRIVATE,
+                pValue=ctypes.cast(ctypes.pointer(ck_true), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_DERIVE,
+                pValue=ctypes.cast(ctypes.pointer(ck_true), ctypes.c_void_p),
+                ulValueLen=1,
+            ),
+            CK_ATTRIBUTE(
+                type=CKA_EC_PARAMS,
+                pValue=ctypes.cast(ec_params_buf, ctypes.c_void_p),
+                ulValueLen=len(SECP256K1_OID_DER),
+            ),
+        ]
+
+        if cka_id:
+            id_bytes = cka_id.encode('utf-8')
+            id_buf = (ctypes.c_ubyte * len(id_bytes))(*id_bytes)
+            attributes.append(
+                CK_ATTRIBUTE(
+                    type=CKA_ID,
+                    pValue=ctypes.cast(id_buf, ctypes.c_void_p),
+                    ulValueLen=len(id_bytes),
+                )
+            )
+
+        if cka_label:
+            label_bytes = cka_label.encode('utf-8')
+            label_buf = ctypes.create_string_buffer(label_bytes)
+            attributes.append(
+                CK_ATTRIBUTE(
+                    type=CKA_LABEL,
+                    pValue=ctypes.cast(label_buf, ctypes.c_void_p),
+                    ulValueLen=len(label_bytes),
+                )
+            )
+
+        private_template = (CK_ATTRIBUTE * len(attributes))(*attributes)
+        handle = ctypes.c_ulong()
+        rv = pkcs11.C_CreateObject(
+            session,
+            private_template,
+            len(attributes),
+            ctypes.byref(handle),
+        )
+
+        if rv != 0:
+            print(f'C_CreateObject вернула ошибку: 0x{rv:08X}')
+        else:
+            print('Мастер-ключ успешно импортирован.')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
+        pkcs11.C_CloseSession(session)
+
+        _zero_bytearray(mnemonic_bytes)
+        _zero_bytearray(seed)
+        _zero_bytearray(hmac_result)
+        _zero_bytearray(master_priv)
+        _zero_bytearray(chain_code)
+
+        if master_priv_buf is not None:
+            ctypes.memset(master_priv_buf, 0, ctypes.sizeof(master_priv_buf))
+        if chain_code_buf is not None:
+            ctypes.memset(chain_code_buf, 0, ctypes.sizeof(chain_code_buf))
+        if ec_params_buf is not None:
+            ctypes.memset(ec_params_buf, 0, ctypes.sizeof(ec_params_buf))
+        if id_buf is not None:
+            ctypes.memset(id_buf, 0, ctypes.sizeof(id_buf))
+        if label_buf is not None:
+            ctypes.memset(label_buf, 0, ctypes.sizeof(label_buf))
 
 
 @pkcs11_command
