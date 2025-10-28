@@ -688,15 +688,6 @@ def generate_key_pair(
                     ctypes.pointer(mech_params), ctypes.c_void_p
                 )
                 mechanism.ulParameterLen = ctypes.sizeof(mech_params)
-                priv_attrs.append(
-                    CK_ATTRIBUTE(
-                        type=CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE,
-                        pValue=ctypes.cast(
-                            ctypes.pointer(true_val), ctypes.c_void_p
-                        ),
-                        ulValueLen=1,
-                    )
-                )
             else:
                 mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
                 mechanism.pParameter = None

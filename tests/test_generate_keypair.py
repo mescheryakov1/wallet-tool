@@ -200,7 +200,9 @@ def test_generate_secp256_with_mnemonic(monkeypatch, capsys):
     assert captured['mechanism_passphrase_len'] == 0
     assert captured['mechanism_mnemonic_len'] == 24
     assert captured['mechanism_passphrase_ptr'] != 0
-    assert captured['priv_%d' % structs.CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE] == 1
+    assert (
+        'priv_%d' % structs.CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE not in captured
+    )
     assert captured['pub_%d' % structs.CKA_KEY_TYPE] == structs.CKK_VENDOR_BIP32
     assert captured['priv_%d' % structs.CKA_KEY_TYPE] == structs.CKK_VENDOR_BIP32
     assert captured['mnemonic_size_requests'] == [len(captured['sample_mnemonic'])]
