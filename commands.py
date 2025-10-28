@@ -901,12 +901,12 @@ def generate_key_pair(
                 mechanism.mechanism = CKM_EC_KEY_PAIR_GEN
                 mechanism.pParameter = None
                 mechanism.ulParameterLen = 0
-            oid = (ctypes.c_ubyte * 10)(0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07)
+            oid = (ctypes.c_ubyte * len(SECP256R1_OID_DER))(*SECP256R1_OID_DER)
             pub_attrs.append(
                 CK_ATTRIBUTE(
                     type=CKA_EC_PARAMS,
                     pValue=ctypes.cast(oid, ctypes.c_void_p),
-                    ulValueLen=10,
+                    ulValueLen=len(SECP256R1_OID_DER),
                 )
             )
             key_type_pub = ctypes.c_ulong(CKK_EC)
