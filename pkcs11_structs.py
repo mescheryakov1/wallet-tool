@@ -23,6 +23,8 @@ CKK_EC = 0x00000003
 CKK_EC_EDWARDS = 0x00000040
 CKK_EC_MONTGOMERY = 0x00000041
 CKK_GOSTR3410 = 0x00000030
+CKK_VENDOR_DEFINED = 0x80000000
+CKK_VENDOR_BIP32 = CKK_VENDOR_DEFINED + 2
 
 # Флаги токена из расширенной информации, используем только необходимые значения
 TOKEN_FLAGS_USER_PIN_NOT_DEFAULT = 0x00000008
@@ -40,10 +42,17 @@ CKA_EC_PARAMS = 0x00000180
 CKA_GOSTR3410_PARAMS = 0x00000250
 CKA_GOSTR3411_PARAMS = 0x00000251
 
+CKA_VENDOR_DEFINED = 0x80000000
+BIP32 = CKA_VENDOR_DEFINED | 0x5000
+CKA_VENDOR_BIP39_MNEMONIC = BIP32 | 0x04
+CKA_VENDOR_BIP39_MNEMONIC_IS_EXTRACTABLE = BIP32 | 0x05
+
 CKM_RSA_PKCS_KEY_PAIR_GEN = 0x00000000
 CKM_EC_KEY_PAIR_GEN = 0x00001040
 CKM_EC_EDWARDS_KEY_PAIR_GEN = 0x00001055
 CKM_GOSTR3410_KEY_PAIR_GEN = 0x00001200
+CKM_VENDOR_DEFINED = 0x80000000
+CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN = CKM_VENDOR_DEFINED + 9
 
 CKF_SERIAL_SESSION = 1 << 1  # 0x00000002
 CKF_RW_SESSION = 1 << 2  # 0x00000004
@@ -156,4 +165,13 @@ class CK_MECHANISM(ctypes.Structure):
         ('mechanism', ctypes.c_ulong),
         ('pParameter', ctypes.c_void_p),
         ('ulParameterLen', ctypes.c_ulong),
+    ]
+
+
+class CK_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN_PARAMS(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('pPassphrase', ctypes.c_void_p),
+        ('ulPassphraseLen', ctypes.c_ulong),
+        ('ulMnemonicLength', ctypes.c_ulong),
     ]

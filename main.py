@@ -53,6 +53,11 @@ def main():
     parser.add_argument('--key-label', type=str, default='',
                         help='CKA_LABEL для создаваемой ключевой пары')
     parser.add_argument(
+        '--get-mnemonic',
+        action='store_true',
+        help='Получить мнемоническую фразу при генерации secp256 ключа',
+    )
+    parser.add_argument(
         '--delete-key',
         action='store_true',
         help='Удалить ключевую пару; требуется параметр --key-number',
@@ -93,6 +98,7 @@ def main():
                 args.generate_key,
                 cka_id=args.key_id,
                 cka_label=args.key_label,
+                get_mnemonic=args.get_mnemonic,
             )
     elif args.delete_key:
         if args.key_number is None:
