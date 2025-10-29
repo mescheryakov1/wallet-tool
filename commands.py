@@ -80,7 +80,7 @@ SECP256R1_OID_DER = bytes(
 )
 
 
-def format_attribute_value(value: bytes, mode: str) -> str:
+def format_attribute_value(value: bytes, mode: str, *, truncate: bool = True) -> str:
     """Return string representation of attribute value.
 
     Parameters
@@ -89,6 +89,10 @@ def format_attribute_value(value: bytes, mode: str) -> str:
         Raw value returned from PKCS#11.
     mode: str
         Either ``"hex"`` or ``"text"``.
+    truncate: bool
+        When ``True`` long values may be shortened with an ellipsis for compact
+        output. ``False`` forces the complete value to be returned, wrapped across
+        multiple lines for readability.
 
     Returns
     -------
@@ -98,10 +102,19 @@ def format_attribute_value(value: bytes, mode: str) -> str:
     """
 
     if mode == "hex":
-        hex_part = " ".join(f"{b:02X}" for b in value[:30])
-        if len(value) > 30:
-            hex_part += " ..."
-        return hex_part
+        if not value:
+            return ""
+        hex_bytes = [f"{b:02X}" for b in value]
+        if truncate and len(value) > 30:
+            return " ".join(hex_bytes[:30]) + " ..."
+        if truncate:
+            return " ".join(hex_bytes)
+        line_length = 16
+        lines = [
+            " ".join(hex_bytes[idx : idx + line_length])
+            for idx in range(0, len(hex_bytes), line_length)
+        ]
+        return "\n".join(lines)
 
     if mode == "text":
         try:
@@ -616,11 +629,30 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                 )
                 print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
                 def print_attribute(name, raw_value, hex_only=False):
-                    hex_repr = format_attribute_value(raw_value, 'hex')
-                    print(f'      {name} (HEX): {hex_repr}')
+                    no_truncate_attrs = {
+                        'CKA_EC_PARAMS',
+                        'CKA_EC_POINT',
+                        'CKA_VALUE',
+                        'CKA_MODULUS',
+                        'CKA_PUBLIC_EXPONENT',
+                    }
+
+                    def emit(label, mode, *, truncate):
+                        formatted = format_attribute_value(raw_value, mode, truncate=truncate)
+                        lines = formatted.splitlines() or [""]
+                        prefix = f'      {name} ({label}): '
+                        print(prefix + lines[0])
+                        continuation = ' ' * len(prefix)
+                        for part in lines[1:]:
+                            print(f'{continuation}{part}')
+
+                    emit(
+                        'HEX',
+                        'hex',
+                        truncate=name not in no_truncate_attrs,
+                    )
                     if not hex_only:
-                        text_repr = format_attribute_value(raw_value, 'text')
-                        print(f'      {name} (TEXT): {text_repr}')
+                        emit('TEXT', 'text', truncate=True)
 
                 if 'public' in pair:
                     _, attrs = pair['public']

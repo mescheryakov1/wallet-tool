@@ -281,8 +281,20 @@ def test_format_attribute_value_text_truncate():
     assert out == "a" * 30 + "..."
 
 
+def test_format_attribute_value_hex_full_wrap():
+    data = bytes(range(40))
+    out = commands.format_attribute_value(data, "hex", truncate=False)
+    assert "..." not in out
+    lines = out.splitlines()
+    assert len(lines) > 1
+    assert lines[0].startswith("00 01 02 03")
+    assert lines[-1].endswith("26 27")
+
+
 def test_list_keys_prints_key_type(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
+    pkcs11_mock.C_Initialize = lambda args: 0
+    pkcs11_mock.C_Finalize = lambda args: 0
 
     def open_session(slot, flags, app, notify, session_ptr):
         session_ptr._obj.value = 1
@@ -385,6 +397,96 @@ def test_list_keys_prints_ec_key_type(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "ECDSA" in out
     assert "bitcoin" in out
+
+
+def test_list_keys_prints_full_ec_attributes(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+    pkcs11_mock.C_Initialize = lambda args: 0
+    pkcs11_mock.C_Finalize = lambda args: 0
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    current_class = None
+
+    def find_objects_init(session_handle, template_ptr, count):
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attr = arr[0]
+        val_ptr = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong))
+        nonlocal current_class
+        current_class = val_ptr.contents.value
+        return 0
+
+    pkcs11_mock.C_FindObjectsInit = find_objects_init
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if current_class == structs.CKO_PUBLIC_KEY and not hasattr(find_objects, "done"):
+            obj_ptr._obj.value = 123
+            count_ptr._obj.value = 1
+            find_objects.done = True
+        else:
+            count_ptr._obj.value = 0
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+
+    ec_params = bytes(range(32))
+    ec_point = bytes(range(48))
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        if not attr.pValue:
+            if attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            elif attr.type == structs.CKA_LABEL:
+                attr.ulValueLen = len(b"label")
+            elif attr.type == structs.CKA_ID:
+                attr.ulValueLen = len(b"id")
+            elif attr.type == structs.CKA_EC_PARAMS:
+                attr.ulValueLen = len(ec_params)
+            elif attr.type == structs.CKA_EC_POINT:
+                attr.ulValueLen = len(ec_point)
+            else:
+                attr.ulValueLen = 0
+            return 0
+
+        if attr.type == structs.CKA_KEY_TYPE:
+            val = ctypes.c_ulong(structs.CKK_EC)
+            ctypes.memmove(attr.pValue, ctypes.byref(val), ctypes.sizeof(val))
+        elif attr.type == structs.CKA_LABEL:
+            ctypes.memmove(attr.pValue, b"label", len(b"label"))
+        elif attr.type == structs.CKA_ID:
+            ctypes.memmove(attr.pValue, b"id", len(b"id"))
+        elif attr.type == structs.CKA_EC_PARAMS:
+            ctypes.memmove(attr.pValue, ec_params, len(ec_params))
+        elif attr.type == structs.CKA_EC_POINT:
+            ctypes.memmove(attr.pValue, ec_point, len(ec_point))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+
+    logout_called = []
+    pkcs11_mock.C_Logout = lambda session: logout_called.append(True) or 0
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_keys(wallet_id=1, pin=None)
+
+    out = capsys.readouterr().out
+    assert "CKA_EC_PARAMS (HEX): 00 01 02 03" in out
+    assert "CKA_EC_POINT (HEX): 00 01 02 03" in out
+    assert "..." not in out
+    assert "10 11 12 13 14 15 16 17" in out
+    assert "2E 2F" in out
 
 
 def test_public_key_label_from_private(monkeypatch, capsys):
