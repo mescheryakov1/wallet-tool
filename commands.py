@@ -615,9 +615,12 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                     else ''
                 )
                 print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
-                def print_hex_attribute(name, raw_value):
+                def print_attribute(name, raw_value, hex_only=False):
                     hex_repr = format_attribute_value(raw_value, 'hex')
                     print(f'      {name} (HEX): {hex_repr}')
+                    if not hex_only:
+                        text_repr = format_attribute_value(raw_value, 'text')
+                        print(f'      {name} (TEXT): {text_repr}')
 
                 if 'public' in pair:
                     _, attrs = pair['public']
@@ -627,7 +630,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                         if raw is None and name == 'CKA_LABEL' and 'private' in pair:
                             raw = pair['private'][1].get(name)
                         if raw is not None:
-                            print_hex_attribute(name, raw)
+                            print_attribute(name, raw)
                     key_type = attrs.get('CKA_KEY_TYPE')
                     if key_type == CKK_GOSTR3410:
                         attr_names = ['CKA_VALUE']
@@ -644,7 +647,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                     for name in attr_names:
                         raw = attrs.get(name)
                         if raw is not None:
-                            print_hex_attribute(name, raw)
+                            print_attribute(name, raw, hex_only=True)
                 if 'private' in pair:
                     _, attrs = pair['private']
                     print('    Закрытый ключ')
@@ -653,7 +656,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                         if raw is None and name == 'CKA_LABEL' and 'public' in pair:
                             raw = pair['public'][1].get(name)
                         if raw is not None:
-                            print_hex_attribute(name, raw)
+                            print_attribute(name, raw)
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
