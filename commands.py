@@ -1467,14 +1467,28 @@ def run_command_generate_key_pair(
 
 
 @pkcs11_command
-def delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
-    """Delete key pair from token by its index (``key-number``)."""
+def delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None, force=False):
+    """Delete key pair from token by its index (``key-number``).
+
+    Parameters
+    ----------
+    force: bool
+        When ``True`` deletes all objects from the token instead of a specific
+        key pair. ``force`` cannot be used together with ``key_number`` and
+        requires a PIN code to be provided.
+    """
     run_command_delete_key_pair(
-        pkcs11, wallet_id=wallet_id, pin=pin, key_number=key_number
+        pkcs11,
+        wallet_id=wallet_id,
+        pin=pin,
+        key_number=key_number,
+        force=force,
     )
 
 
-def run_command_delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
+def run_command_delete_key_pair(
+    pkcs11, wallet_id=0, pin=None, key_number=None, force=False
+):
     define_pkcs11_functions(pkcs11)
 
     session = ctypes.c_ulong()
@@ -1512,7 +1526,13 @@ def run_command_delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
             if not pin:
                 print('Необходимо указать PIN-код для удаления ключей', file=sys.stderr)
                 had_error = True
-            if key_number is None:
+            if force and key_number is not None:
+                print(
+                    'Параметры --force и --key-number не могут использоваться одновременно',
+                    file=sys.stderr,
+                )
+                had_error = True
+            if not force and key_number is None:
                 print(
                     'Необходимо указать параметр --key-number для удаления ключа',
                     file=sys.stderr,
@@ -1582,42 +1602,75 @@ def run_command_delete_key_pair(pkcs11, wallet_id=0, pin=None, key_number=None):
                     return None
                 return bytes(buf)
 
-            pairs = []
-
-            def add_handle(kind, handle):
-                key_id = get_id(handle)
-                for entry in pairs:
-                    if entry['key_id'] == key_id and kind not in entry:
-                        entry[kind] = handle
-                        return
-                pairs.append({'key_id': key_id, kind: handle})
-
-            for h in search_objects(CKO_PUBLIC_KEY):
-                add_handle('public', h)
-
-            for h in search_objects(CKO_PRIVATE_KEY):
-                add_handle('private', h)
-
-            sorted_pairs = sorted(
-                enumerate(pairs),
-                key=lambda item: ((item[1]['key_id'] or b''), item[0]),
-            )
-
-            if key_number < 1 or key_number > len(sorted_pairs):
-                print('Ключ с таким номером не найден')
-            else:
-                pair = sorted_pairs[key_number - 1][1]
+            if force:
                 handles_to_delete = []
-                if 'private' in pair:
-                    handles_to_delete.append(pair['private'])
-                if 'public' in pair:
-                    handles_to_delete.append(pair['public'])
+                rv_local = pkcs11.C_FindObjectsInit(session, None, 0)
+                if rv_local != CKR_OK:
+                    print(f'C_FindObjectsInit вернула ошибку: 0x{rv_local:08X}')
+                else:
+                    try:
+                        obj = ctypes.c_ulong()
+                        count = ctypes.c_ulong()
+                        while True:
+                            rv_local = pkcs11.C_FindObjects(
+                                session, ctypes.byref(obj), 1, ctypes.byref(count)
+                            )
+                            if rv_local != CKR_OK:
+                                print(
+                                    f'C_FindObjects вернула ошибку: 0x{rv_local:08X}'
+                                )
+                                break
+                            if count.value == 0:
+                                break
+                            handles_to_delete.append(obj.value)
+                    finally:
+                        rv_final = pkcs11.C_FindObjectsFinal(session)
+                        if rv_final != CKR_OK:
+                            print(
+                                f'C_FindObjectsFinal вернула ошибку: 0x{rv_final:08X}'
+                            )
+
                 for handle_value in handles_to_delete:
-                    rv_local = pkcs11.C_DestroyObject(
-                        session, ctypes.c_ulong(handle_value)
-                    )
+                    rv_local = pkcs11.C_DestroyObject(session, ctypes.c_ulong(handle_value))
                     if rv_local not in (CKR_OK, CKR_OBJECT_HANDLE_INVALID):
                         print(f'Ошибка удаления объекта: 0x{rv_local:08X}')
+            else:
+                pairs = []
+
+                def add_handle(kind, handle):
+                    key_id = get_id(handle)
+                    for entry in pairs:
+                        if entry['key_id'] == key_id and kind not in entry:
+                            entry[kind] = handle
+                            return
+                    pairs.append({'key_id': key_id, kind: handle})
+
+                for h in search_objects(CKO_PUBLIC_KEY):
+                    add_handle('public', h)
+
+                for h in search_objects(CKO_PRIVATE_KEY):
+                    add_handle('private', h)
+
+                sorted_pairs = sorted(
+                    enumerate(pairs),
+                    key=lambda item: ((item[1]['key_id'] or b''), item[0]),
+                )
+
+                if key_number < 1 or key_number > len(sorted_pairs):
+                    print('Ключ с таким номером не найден')
+                else:
+                    pair = sorted_pairs[key_number - 1][1]
+                    handles_to_delete = []
+                    if 'private' in pair:
+                        handles_to_delete.append(pair['private'])
+                    if 'public' in pair:
+                        handles_to_delete.append(pair['public'])
+                    for handle_value in handles_to_delete:
+                        rv_local = pkcs11.C_DestroyObject(
+                            session, ctypes.c_ulong(handle_value)
+                        )
+                        if rv_local not in (CKR_OK, CKR_OBJECT_HANDLE_INVALID):
+                            print(f'Ошибка удаления объекта: 0x{rv_local:08X}')
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
