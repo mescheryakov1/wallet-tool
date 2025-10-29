@@ -150,6 +150,19 @@ def print_attribute_hex(name: str, raw_value: bytes, indent: str = "      ") -> 
         print(f"{continuation}{line}")
 
 
+def print_attribute_text(name: str, raw_value: bytes, indent: str = "      ") -> None:
+    """Print attribute value in text form guarding against non-printables."""
+
+    label = f"{indent}{name}: "
+    if raw_value is None:
+        print(f"{label}—")
+        return
+
+    text_value = format_attribute_value(raw_value, "text")
+
+    print(f"{label}{text_value}")
+
+
 def _decode_char_array(char_array) -> str:
     raw = bytes(char_array)
     text = raw.rstrip(b"\0 ").decode("utf-8", errors="ignore").strip()
@@ -779,6 +792,8 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                         ):
                             raw = private_entry[1].get(name)
                         if raw is not None:
+                            if name in {'CKA_LABEL', 'CKA_ID'}:
+                                print_attribute_text(name, raw)
                             print_attribute_hex(name, raw)
                 else:
                     print('  предупреждение: отсутствует открытый ключ')
@@ -798,6 +813,8 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
 
                         for name in private_names:
                             if name in attrs:
+                                if name in {'CKA_LABEL', 'CKA_ID'}:
+                                    print_attribute_text(name, attrs[name])
                                 print_attribute_hex(name, attrs[name])
                     else:
                         print('      не удалось прочитать атрибуты приватного ключа')

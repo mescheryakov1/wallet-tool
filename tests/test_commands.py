@@ -469,6 +469,10 @@ def test_list_keys_gost_value_full_hex(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "CKA_VALUE (HEX)" in out
     assert "(TEXT)" not in out
+    assert "      CKA_LABEL: gost" in out
+    assert "      CKA_LABEL (HEX): 67 6F 73 74" in out
+    assert "      CKA_ID: id" in out
+    assert "      CKA_ID (HEX): 69 64" in out
     assert (
         "      CKA_VALUE (HEX): 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F"
         in out
@@ -646,9 +650,16 @@ def test_list_keys_rsa_prints_modulus(monkeypatch, capsys):
     commands.list_keys(wallet_id=1, pin=None)
 
     out = capsys.readouterr().out
+    lines = out.splitlines()
     assert "CKA_MODULUS (HEX)" in out
     assert "CKA_PUBLIC_EXPONENT (HEX): 01 00 01" in out
     assert "CKA_MODULUS_BITS (HEX)" in out
+    pub_idx = lines.index("    Публичный ключ")
+    pub_block = lines[pub_idx + 1 : pub_idx + 8]
+    assert "      CKA_LABEL: rsa" in pub_block
+    assert "      CKA_LABEL (HEX): 72 73 61" in pub_block
+    assert "      CKA_ID: rsa-id" in pub_block
+    assert "      CKA_ID (HEX): 72 73 61 2D 69 64" in pub_block
 
 
 @pytest.mark.parametrize(
@@ -805,6 +816,15 @@ def test_list_keys_private_does_not_print_public_only_attrs(
     for marker in forbidden:
         assert any(marker in line for line in public_block)
         assert all(marker not in line for line in private_block)
+
+    assert "      CKA_LABEL: pub" in public_block
+    assert "      CKA_LABEL (HEX): 70 75 62" in public_block
+    assert "      CKA_ID: key-id" in public_block
+    assert "      CKA_ID (HEX): 6B 65 79 2D 69 64" in public_block
+    assert "      CKA_LABEL: priv" in private_block
+    assert "      CKA_LABEL (HEX): 70 72 69 76" in private_block
+    assert "      CKA_ID: key-id" in private_block
+    assert "      CKA_ID (HEX): 6B 65 79 2D 69 64" in private_block
 
 def test_public_key_label_from_private(monkeypatch, capsys):
     """Public key should display label taken from the corresponding private key."""
