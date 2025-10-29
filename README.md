@@ -12,6 +12,12 @@ specified.
 python main.py --generate-key ed25519 --wallet-id 0 --pin 12345678 --key-id myid --key-label mylabel
 python main.py --generate-key gost --wallet-id 0 --pin 12345678 --key-id myid --key-label mylabel
 python main.py --delete-key --key-number 1 --wallet-id 0 --pin 12345678
+python main.py --delete-key --force --wallet-id 0 --pin 12345678
 python main.py --change-pin --wallet-id 0 --pin 12345678 --new-pin 1234
 ```
+
+Использование параметра ``--force`` удалит все объекты на токене и требует
+одновременного указания пользовательского PIN-кода. Параметры ``--force`` и
+``--key-number`` взаимоисключающие.
+
 GOST key generation also requires ``--key-id`` and ``--key-label``.

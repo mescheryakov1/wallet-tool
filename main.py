@@ -66,12 +66,17 @@ def main():
     parser.add_argument(
         '--delete-key',
         action='store_true',
-        help='Удалить ключевую пару; требуется параметр --key-number',
+        help='Удалить ключевую пару; требуется параметр --key-number или --force',
     )
     parser.add_argument(
         '--key-number',
         type=int,
         help='Номер ключа из списка (key-number) для удаления',
+    )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Удалить все объекты на токене (требуется PIN, несовместимо с --key-number)',
     )
     parser.add_argument('--change-pin', action='store_true',
                         help='Сменить пользовательский PIN-код')
@@ -115,10 +120,17 @@ def main():
                 get_mnemonic=args.get_mnemonic,
             )
     elif args.delete_key:
-        if args.key_number is None:
+        if args.force and args.key_number is not None:
+            print('Нельзя использовать одновременно параметры --force и --key-number', file=sys.stderr)
+        elif not args.force and args.key_number is None:
             print('Для удаления необходимо указать параметр --key-number', file=sys.stderr)
         else:
-            delete_key_pair(args.wallet_id, args.pin, key_number=args.key_number)
+            delete_key_pair(
+                args.wallet_id,
+                args.pin,
+                key_number=args.key_number,
+                force=args.force,
+            )
     elif args.change_pin:
         change_pin(args.wallet_id, args.pin, args.new_pin)
     else:
