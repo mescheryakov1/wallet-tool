@@ -159,6 +159,57 @@ def _print_table(title: str, rows, headers=("Параметр", "Значени�
     print()
 
 
+def safe_get_attributes(pkcs11, session, handle, attr_types):
+    """Safely read a list of attributes for a PKCS#11 object.
+
+    Returns a dictionary mapping attribute type to value. If the attributes
+    cannot be retrieved (for example, because the handle is invalid), ``None``
+    is returned instead of raising an exception or printing to stderr.
+    """
+
+    if handle is None:
+        return None
+
+    result = {}
+    handle_obj = ctypes.c_ulong(handle)
+    unavailable = ctypes.c_ulong(-1).value
+
+    for attr_type in attr_types:
+        attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
+        rv = pkcs11.C_GetAttributeValue(
+            session, handle_obj, ctypes.byref(attr_template), 1
+        )
+        if rv == CKR_OBJECT_HANDLE_INVALID:
+            return None
+        if rv != CKR_OK:
+            continue
+
+        length = attr_template.ulValueLen
+        if length == unavailable:
+            continue
+        if length > 0:
+            buffer = (ctypes.c_ubyte * length)()
+            attr_template.pValue = ctypes.cast(buffer, ctypes.c_void_p)
+            rv = pkcs11.C_GetAttributeValue(
+                session, handle_obj, ctypes.byref(attr_template), 1
+            )
+            if rv == CKR_OBJECT_HANDLE_INVALID:
+                return None
+            if rv != CKR_OK:
+                continue
+            raw_value = bytes(buffer)
+        else:
+            raw_value = b""
+
+        if attr_type == CKA_KEY_TYPE:
+            if raw_value:
+                result[attr_type] = int.from_bytes(raw_value, sys.byteorder)
+        else:
+            result[attr_type] = raw_value
+
+    return result
+
+
 @pkcs11_command
 def show_wallet_info(pkcs11, wallet_id=0):
     """Получить подробную информацию о кошельке."""
@@ -475,17 +526,41 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
 
         if session_opened and not had_error:
 
-            def search_objects(obj_class):
+            def search_objects(obj_class, extra_attrs=None):
                 handles = []
                 class_val = ctypes.c_ulong(obj_class)
-                attr = CK_ATTRIBUTE(
-                    type=CKA_CLASS,
-                    pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
-                    ulValueLen=ctypes.sizeof(class_val),
-                )
-                template = (CK_ATTRIBUTE * 1)(attr)
+                attrs = [
+                    CK_ATTRIBUTE(
+                        type=CKA_CLASS,
+                        pValue=ctypes.cast(
+                            ctypes.pointer(class_val), ctypes.c_void_p
+                        ),
+                        ulValueLen=ctypes.sizeof(class_val),
+                    )
+                ]
+                buffers = [class_val]
 
-                rv_local = pkcs11.C_FindObjectsInit(session, template, 1)
+                if extra_attrs:
+                    for attr_type, attr_value in extra_attrs:
+                        if attr_value is None:
+                            continue
+                        if isinstance(attr_value, str):
+                            attr_value = attr_value.encode('utf-8')
+                        attr_value = bytes(attr_value)
+                        buf = (ctypes.c_ubyte * len(attr_value))()
+                        buf[: len(attr_value)] = attr_value
+                        attrs.append(
+                            CK_ATTRIBUTE(
+                                type=attr_type,
+                                pValue=ctypes.cast(buf, ctypes.c_void_p),
+                                ulValueLen=len(attr_value),
+                            )
+                        )
+                        buffers.append(buf)
+
+                template = (CK_ATTRIBUTE * len(attrs))(*attrs)
+
+                rv_local = pkcs11.C_FindObjectsInit(session, template, len(attrs))
                 if rv_local != CKR_OK:
                     print(f'C_FindObjectsInit вернула ошибку: 0x{rv_local:08X}')
                     return handles
@@ -509,64 +584,89 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
 
                 return handles
 
-            def get_attributes(handle):
-                attrs = {}
-                for attr_type, attr_name in [
-                    (CKA_LABEL, 'CKA_LABEL'),
-                    (CKA_ID, 'CKA_ID'),
-                    (CKA_VALUE, 'CKA_VALUE'),
-                    (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
-                ]:
-                    attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
-                    rv_local = pkcs11.C_GetAttributeValue(
-                        session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1
-                    )
-                    if rv_local != CKR_OK:
-                        print(
-                            f'C_GetAttributeValue вернула ошибку: 0x{rv_local:08X}'
-                        )
-                        continue
-                    if attr_template.ulValueLen == 0:
-                        continue
-                    buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
-                    attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
-                    rv_local = pkcs11.C_GetAttributeValue(
-                        session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1
-                    )
-                    if rv_local != CKR_OK:
-                        print(
-                            f'C_GetAttributeValue вернула ошибку: 0x{rv_local:08X}'
-                        )
-                        continue
-                    if attr_type == CKA_KEY_TYPE:
-                        attrs[attr_name] = int.from_bytes(bytes(buf), sys.byteorder)
-                    else:
-                        attrs[attr_name] = bytes(buf)
-                return attrs
+            def collect_attributes(handle):
+                attr_map = safe_get_attributes(
+                    pkcs11,
+                    session,
+                    handle,
+                    [CKA_LABEL, CKA_ID, CKA_VALUE, CKA_KEY_TYPE],
+                )
+                if attr_map is None:
+                    return None
 
-            def add_object(kind, handle_attrs):
-                key_id = handle_attrs[1].get('CKA_ID')
+                result = {}
+                if CKA_LABEL in attr_map and attr_map[CKA_LABEL] is not None:
+                    result['CKA_LABEL'] = attr_map[CKA_LABEL]
+                if CKA_ID in attr_map and attr_map[CKA_ID] is not None:
+                    result['CKA_ID'] = attr_map[CKA_ID]
+                if CKA_VALUE in attr_map and attr_map[CKA_VALUE] is not None:
+                    result['CKA_VALUE'] = attr_map[CKA_VALUE]
+                if CKA_KEY_TYPE in attr_map and attr_map[CKA_KEY_TYPE] is not None:
+                    result['CKA_KEY_TYPE'] = attr_map[CKA_KEY_TYPE]
+
+                return result
+
+            def add_object(kind, handle, attrs, key_id_override=None):
+                key_id = key_id_override
+                if key_id is None and attrs and 'CKA_ID' in attrs:
+                    key_id = attrs['CKA_ID']
                 for entry in objects:
                     if entry['key_id'] == key_id and kind not in entry:
-                        entry[kind] = handle_attrs
-                        return
-                objects.append({'key_id': key_id, kind: handle_attrs})
+                        entry[kind] = (handle, attrs)
+                        return entry
+                entry = {'key_id': key_id, kind: (handle, attrs)}
+                objects.append(entry)
+                return entry
 
-            for h in search_objects(CKO_PUBLIC_KEY):
-                attrs = get_attributes(h)
-                add_object('public', (h, attrs))
+            public_attrs_by_handle = {}
+            public_handles_by_id = {}
+            public_order = []
+
+            for handle in search_objects(CKO_PUBLIC_KEY):
+                attrs = collect_attributes(handle)
+                public_attrs_by_handle[handle] = attrs
+                if attrs and 'CKA_ID' in attrs:
+                    public_handles_by_id.setdefault(attrs['CKA_ID'], []).append(handle)
+                public_order.append(handle)
+                add_object('public', handle, attrs)
+
+            def find_public_key_by_id(key_id):
+                if key_id is None:
+                    return None
+                handles = public_handles_by_id.get(key_id)
+                if not handles:
+                    return None
+                return handles.pop(0)
+
+            seen_public_handles = set()
 
             if logged_in:
-                for h in search_objects(CKO_PRIVATE_KEY):
-                    attrs = get_attributes(h)
-                    add_object('private', (h, attrs))
+                for handle in search_objects(CKO_PRIVATE_KEY):
+                    attrs = collect_attributes(handle)
+                    entry = add_object('private', handle, attrs)
+                    key_id = entry['key_id']
+                    if key_id is None and attrs and 'CKA_ID' in attrs:
+                        key_id = attrs['CKA_ID']
+                        entry['key_id'] = key_id
 
-            for pair in objects:
-                if 'public' in pair and 'private' in pair:
-                    pub_attrs = pair['public'][1]
-                    priv_attrs = pair['private'][1]
-                    if 'CKA_LABEL' not in pub_attrs and 'CKA_LABEL' in priv_attrs:
-                        pub_attrs['CKA_LABEL'] = priv_attrs['CKA_LABEL']
+                    pub_handle = None
+                    if attrs and 'CKA_ID' in attrs:
+                        pub_handle = find_public_key_by_id(attrs['CKA_ID'])
+                    if pub_handle is not None:
+                        seen_public_handles.add(pub_handle)
+                        entry['public'] = (
+                            pub_handle,
+                            public_attrs_by_handle.get(pub_handle),
+                        )
+                    elif 'public' in entry:
+                        # keep previously collected public data if available
+                        pass
+
+            for handle in public_order:
+                if handle in seen_public_handles:
+                    continue
+                attrs = public_attrs_by_handle.get(handle)
+                add_object('public', handle, attrs)
 
             print('Список ключей в кошельке:')
             sorted_pairs = sorted(
@@ -576,38 +676,49 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
             for idx, pair in enumerate(sorted_pairs, start=1):
                 pair = pair[1]
                 key_type = None
-                if 'public' in pair and 'CKA_KEY_TYPE' in pair['public'][1]:
-                    key_type = pair['public'][1]['CKA_KEY_TYPE']
-                elif 'private' in pair and 'CKA_KEY_TYPE' in pair['private'][1]:
-                    key_type = pair['private'][1]['CKA_KEY_TYPE']
+                public_entry = pair.get('public')
+                if (
+                    public_entry
+                    and public_entry[1] is not None
+                    and 'CKA_KEY_TYPE' in public_entry[1]
+                ):
+                    key_type = public_entry[1]['CKA_KEY_TYPE']
+                private_entry = pair.get('private')
+                if key_type is None and private_entry and private_entry[1] and 'CKA_KEY_TYPE' in private_entry[1]:
+                    key_type = private_entry[1]['CKA_KEY_TYPE']
                 suffix = (
                     f" ({key_type_description.get(key_type)})"
                     if key_type in key_type_description
                     else ''
                 )
                 print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
-                if 'public' in pair:
-                    _, attrs = pair['public']
+                if public_entry and public_entry[1] is not None:
+                    _, attrs = public_entry
                     print('    Публичный ключ')
                     for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
                         raw = attrs.get(name)
-                        if raw is None and name == 'CKA_LABEL' and 'private' in pair:
-                            raw = pair['private'][1].get(name)
+                        if raw is None and name == 'CKA_LABEL' and private_entry and private_entry[1]:
+                            raw = private_entry[1].get(name)
                         if raw is not None:
                             hex_repr = format_attribute_value(raw, 'hex')
                             text_repr = format_attribute_value(raw, 'text')
                             print(f'      {name} (HEX): {hex_repr}')
                             print(f'      {name} (TEXT): {text_repr}')
+                else:
+                    print('  предупреждение: отсутствует открытый ключ')
                 if 'private' in pair:
                     _, attrs = pair['private']
                     print('    Закрытый ключ')
-                    for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
-                        if name in attrs:
-                            raw = attrs[name]
-                            hex_repr = format_attribute_value(raw, 'hex')
-                            text_repr = format_attribute_value(raw, 'text')
-                            print(f'      {name} (HEX): {hex_repr}')
-                            print(f'      {name} (TEXT): {text_repr}')
+                    if attrs is not None:
+                        for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                            if name in attrs:
+                                raw = attrs[name]
+                                hex_repr = format_attribute_value(raw, 'hex')
+                                text_repr = format_attribute_value(raw, 'text')
+                                print(f'      {name} (HEX): {hex_repr}')
+                                print(f'      {name} (TEXT): {text_repr}')
+                    else:
+                        print('      не удалось прочитать атрибуты приватного ключа')
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
