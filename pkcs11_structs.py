@@ -65,8 +65,10 @@ CKF_RW_SESSION = 1 << 2  # 0x00000004
 # Типы пользователей
 CKU_USER = 1
 
-# Возвращаемое значение PKCS#11 при отсутствии токена в слоте
+# Статусы возврата PKCS#11
+CKR_OK = 0x00000000
 CKR_TOKEN_NOT_PRESENT = 0x000000E0
+CKR_OBJECT_HANDLE_INVALID = 0x00000082
 
 # Структуры PKCS#11
 

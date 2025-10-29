@@ -5,10 +5,16 @@ from pkcs11_structs import (
     CK_TOKEN_INFO,
     CK_ATTRIBUTE,
     CK_TOKEN_INFO_EXTENDED,
+    CK_VOID_PTR,
 )
 
 def define_pkcs11_functions(pkcs11):
     """Определяет аргументы и возвращаемые значения для функций PKCS#11."""
+    # C_Initialize / C_Finalize
+    pkcs11.C_Initialize.argtypes = [CK_VOID_PTR]
+    pkcs11.C_Initialize.restype = ctypes.c_ulong
+    pkcs11.C_Finalize.argtypes = [CK_VOID_PTR]
+    pkcs11.C_Finalize.restype = ctypes.c_ulong
     # C_GetInfo
     pkcs11.C_GetInfo.argtypes = [ctypes.POINTER(CK_INFO)]  # CK_INFO
     pkcs11.C_GetInfo.restype = ctypes.c_ulong
@@ -36,6 +42,10 @@ def define_pkcs11_functions(pkcs11):
     # C_Login
     pkcs11.C_Login.argtypes = [ctypes.c_ulong, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_ulong]
     pkcs11.C_Login.restype = ctypes.c_ulong
+
+    # C_Logout
+    pkcs11.C_Logout.argtypes = [ctypes.c_ulong]
+    pkcs11.C_Logout.restype = ctypes.c_ulong
 
     # C_SetPIN
     pkcs11.C_SetPIN.argtypes = [
