@@ -684,6 +684,93 @@ def test_list_keys_prints_all_pairs_with_same_id(monkeypatch, capsys):
     assert len(login_calls) == 1
 
 
+def test_list_keys_warns_when_public_missing(monkeypatch, capsys):
+    """A missing public key should not cause attribute errors and prints a warning."""
+
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    current_class = None
+
+    def find_objects_init(session_handle, template_ptr, count):
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attr = arr[0]
+        val_ptr = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong))
+        nonlocal current_class
+        current_class = val_ptr.contents.value
+        return 0
+
+    pkcs11_mock.C_FindObjectsInit = find_objects_init
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if current_class == structs.CKO_PUBLIC_KEY:
+            count_ptr._obj.value = 0
+            return 0
+
+        if hasattr(find_objects, "done"):
+            count_ptr._obj.value = 0
+            return 0
+
+        obj_ptr._obj.value = 555
+        count_ptr._obj.value = 1
+        find_objects.done = True
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+
+    LABEL = b"only-private"
+    KEY_ID = b"unpaired"
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        handle = obj if isinstance(obj, int) else obj.value
+        if handle != 555:
+            return structs.CKR_OBJECT_HANDLE_INVALID
+
+        if not attr.pValue:
+            if attr.type == structs.CKA_LABEL:
+                attr.ulValueLen = len(LABEL)
+            elif attr.type == structs.CKA_ID:
+                attr.ulValueLen = len(KEY_ID)
+            elif attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            else:
+                attr.ulValueLen = 0
+            return 0
+
+        if attr.type == structs.CKA_LABEL:
+            ctypes.memmove(attr.pValue, LABEL, len(LABEL))
+        elif attr.type == structs.CKA_ID:
+            ctypes.memmove(attr.pValue, KEY_ID, len(KEY_ID))
+        elif attr.type == structs.CKA_KEY_TYPE:
+            val = ctypes.c_ulong(structs.CKK_RSA)
+            ctypes.memmove(attr.pValue, ctypes.byref(val), ctypes.sizeof(val))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+    pkcs11_mock.C_Login = lambda *args: 0
+    pkcs11_mock.C_Logout = lambda session: 0
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_keys(wallet_id=1, pin="0000")
+
+    out = capsys.readouterr().out
+    assert "предупреждение: отсутствует открытый ключ" in out
+    assert "C_GetAttributeValue вернула ошибку" not in out
+
+
 def test_change_pin_success(monkeypatch, capsys):
     pkcs11_mock = SimpleNamespace()
 
