@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--list-keys', action='store_true',
                         help='Показать список ключей в кошельке')
     parser.add_argument(
-        '--import-keys',
+        '--import-key',
         type=str,
         help='Импортировать master node из мнемонической фразы',
     )
@@ -99,11 +99,11 @@ def main():
         show_wallet_info(args.wallet_id)
     elif args.list_keys:
         list_keys(args.wallet_id, args.pin)
-    elif args.import_keys is not None:
+    elif args.import_key is not None:
         import_keys(
             args.wallet_id,
             args.pin,
-            args.import_keys,
+            args.import_key,
             cka_id=args.key_id,
             cka_label=args.key_label,
         )
