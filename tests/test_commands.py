@@ -654,7 +654,7 @@ def test_list_keys_rsa_prints_modulus(monkeypatch, capsys):
     assert "CKA_MODULUS (HEX)" in out
     assert "CKA_PUBLIC_EXPONENT (HEX): 01 00 01" in out
     assert "CKA_MODULUS_BITS (HEX)" in out
-    pub_idx = lines.index("    Публичный ключ")
+    pub_idx = lines.index("    Открытый ключ")
     pub_block = lines[pub_idx + 1 : pub_idx + 8]
     assert "      CKA_LABEL: rsa" in pub_block
     assert "      CKA_LABEL (HEX): 72 73 61" in pub_block
@@ -799,7 +799,7 @@ def test_list_keys_private_does_not_print_public_only_attrs(
     commands.list_keys(wallet_id=1, pin="0000")
 
     lines = capsys.readouterr().out.splitlines()
-    pub_idx = lines.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")
+    pub_idx = lines.index("    Открытый ключ")
     priv_idx = lines.index("    \u0417\u0430\u043a\u0440\u044b\u0442\u044b\u0439 \u043a\u043b\u044e\u0447")
 
     def collect_block(start_index):
@@ -903,7 +903,7 @@ def test_public_key_label_from_private(monkeypatch, capsys):
     commands.list_keys(wallet_id=1, pin="0000")
 
     out = capsys.readouterr().out.splitlines()
-    pub_index = out.index("    \u041f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u043a\u043b\u044e\u0447")
+    pub_index = out.index("    Открытый ключ")
     assert any("CKA_LABEL" in line for line in out[pub_index:pub_index + 5])
     assert login_args[0][1] == structs.CKU_USER
     assert logout_called == [True]

@@ -62,6 +62,7 @@ key_type_description = {
     CKK_EC_EDWARDS: "EdDSA (solana, ton и т.д.)",
     CKK_EC_MONTGOMERY: "EdDSA (solana, ton и т.д.)",
     CKK_GOSTR3410: "ГОСТ 34.10-2012",
+    CKK_VENDOR_BIP32: "ECDSA (bitcoin, ethereum, tron и т.д.)",
 }
 
 SECP256R1_OID_DER = bytes(
@@ -768,7 +769,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                 print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
                 if public_entry and public_entry[1] is not None:
                     _, attrs = public_entry
-                    print('    Публичный ключ')
+                    print('    Открытый ключ')
 
                     names_to_print = ['CKA_LABEL', 'CKA_ID']
                     if key_type == CKK_GOSTR3410:
