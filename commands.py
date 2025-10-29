@@ -14,6 +14,7 @@ from pkcs11_structs import (
     CKA_ID,
     CKA_KEY_TYPE,
     CKA_VALUE,
+    CKA_MODULUS,
     CKO_PUBLIC_KEY,
     CKO_PRIVATE_KEY,
     CKF_SERIAL_SESSION,
@@ -33,6 +34,7 @@ from pkcs11_structs import (
     CKA_MODULUS_BITS,
     CKA_PUBLIC_EXPONENT,
     CKA_EC_PARAMS,
+    CKA_EC_POINT,
     CKA_GOSTR3410_PARAMS,
     CKA_GOSTR3411_PARAMS,
     CKM_RSA_PKCS_KEY_PAIR_GEN,
@@ -509,14 +511,11 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
 
                 return handles
 
-            def get_attributes(handle):
+            invalid_length = ctypes.c_ulong(-1).value
+
+            def get_attributes(handle, attr_specs):
                 attrs = {}
-                for attr_type, attr_name in [
-                    (CKA_LABEL, 'CKA_LABEL'),
-                    (CKA_ID, 'CKA_ID'),
-                    (CKA_VALUE, 'CKA_VALUE'),
-                    (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
-                ]:
+                for attr_type, attr_name in attr_specs:
                     attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
                     rv_local = pkcs11.C_GetAttributeValue(
                         session, ctypes.c_ulong(handle), ctypes.byref(attr_template), 1
@@ -526,7 +525,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                             f'C_GetAttributeValue вернула ошибку: 0x{rv_local:08X}'
                         )
                         continue
-                    if attr_template.ulValueLen == 0:
+                    if attr_template.ulValueLen in (0, invalid_length):
                         continue
                     buf = (ctypes.c_ubyte * attr_template.ulValueLen)()
                     attr_template.pValue = ctypes.cast(buf, ctypes.c_void_p)
@@ -538,10 +537,11 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                             f'C_GetAttributeValue вернула ошибку: 0x{rv_local:08X}'
                         )
                         continue
+                    value_bytes = bytes(buf)
                     if attr_type == CKA_KEY_TYPE:
-                        attrs[attr_name] = int.from_bytes(bytes(buf), sys.byteorder)
+                        attrs[attr_name] = int.from_bytes(value_bytes, sys.byteorder)
                     else:
-                        attrs[attr_name] = bytes(buf)
+                        attrs[attr_name] = value_bytes
                 return attrs
 
             def add_object(kind, handle_attrs):
@@ -552,13 +552,42 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                         return
                 objects.append({'key_id': key_id, kind: handle_attrs})
 
+            public_base_attrs = [
+                (CKA_LABEL, 'CKA_LABEL'),
+                (CKA_ID, 'CKA_ID'),
+                (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
+            ]
+            public_extra_gost = [(CKA_VALUE, 'CKA_VALUE')]
+            public_extra_ec = [
+                (CKA_EC_PARAMS, 'CKA_EC_PARAMS'),
+                (CKA_EC_POINT, 'CKA_EC_POINT'),
+            ]
+            public_extra_rsa = [
+                (CKA_MODULUS, 'CKA_MODULUS'),
+                (CKA_PUBLIC_EXPONENT, 'CKA_PUBLIC_EXPONENT'),
+                (CKA_MODULUS_BITS, 'CKA_MODULUS_BITS'),
+            ]
+            private_attrs = [
+                (CKA_LABEL, 'CKA_LABEL'),
+                (CKA_ID, 'CKA_ID'),
+                (CKA_VALUE, 'CKA_VALUE'),
+                (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
+            ]
+
             for h in search_objects(CKO_PUBLIC_KEY):
-                attrs = get_attributes(h)
+                attrs = get_attributes(h, public_base_attrs)
+                key_type = attrs.get('CKA_KEY_TYPE')
+                if key_type == CKK_GOSTR3410:
+                    attrs.update(get_attributes(h, public_extra_gost))
+                elif key_type in (CKK_EC, CKK_EC_EDWARDS, CKK_EC_MONTGOMERY):
+                    attrs.update(get_attributes(h, public_extra_ec))
+                elif key_type == CKK_RSA:
+                    attrs.update(get_attributes(h, public_extra_rsa))
                 add_object('public', (h, attrs))
 
             if logged_in:
                 for h in search_objects(CKO_PRIVATE_KEY):
-                    attrs = get_attributes(h)
+                    attrs = get_attributes(h, private_attrs)
                     add_object('private', (h, attrs))
 
             for pair in objects:
@@ -586,28 +615,45 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                     else ''
                 )
                 print(f'  Ключ \N{numero sign}{idx} (key-number={idx}){suffix}:')
+                def print_hex_attribute(name, raw_value):
+                    hex_repr = format_attribute_value(raw_value, 'hex')
+                    print(f'      {name} (HEX): {hex_repr}')
+
                 if 'public' in pair:
                     _, attrs = pair['public']
                     print('    Публичный ключ')
-                    for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
+                    for name in ['CKA_LABEL', 'CKA_ID']:
                         raw = attrs.get(name)
                         if raw is None and name == 'CKA_LABEL' and 'private' in pair:
                             raw = pair['private'][1].get(name)
                         if raw is not None:
-                            hex_repr = format_attribute_value(raw, 'hex')
-                            text_repr = format_attribute_value(raw, 'text')
-                            print(f'      {name} (HEX): {hex_repr}')
-                            print(f'      {name} (TEXT): {text_repr}')
+                            print_hex_attribute(name, raw)
+                    key_type = attrs.get('CKA_KEY_TYPE')
+                    if key_type == CKK_GOSTR3410:
+                        attr_names = ['CKA_VALUE']
+                    elif key_type in (CKK_EC, CKK_EC_EDWARDS, CKK_EC_MONTGOMERY):
+                        attr_names = ['CKA_EC_PARAMS', 'CKA_EC_POINT']
+                    elif key_type == CKK_RSA:
+                        attr_names = [
+                            'CKA_MODULUS',
+                            'CKA_PUBLIC_EXPONENT',
+                            'CKA_MODULUS_BITS',
+                        ]
+                    else:
+                        attr_names = []
+                    for name in attr_names:
+                        raw = attrs.get(name)
+                        if raw is not None:
+                            print_hex_attribute(name, raw)
                 if 'private' in pair:
                     _, attrs = pair['private']
                     print('    Закрытый ключ')
                     for name in ['CKA_LABEL', 'CKA_ID', 'CKA_VALUE']:
-                        if name in attrs:
-                            raw = attrs[name]
-                            hex_repr = format_attribute_value(raw, 'hex')
-                            text_repr = format_attribute_value(raw, 'text')
-                            print(f'      {name} (HEX): {hex_repr}')
-                            print(f'      {name} (TEXT): {text_repr}')
+                        raw = attrs.get(name)
+                        if raw is None and name == 'CKA_LABEL' and 'public' in pair:
+                            raw = pair['public'][1].get(name)
+                        if raw is not None:
+                            print_hex_attribute(name, raw)
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
