@@ -115,6 +115,17 @@ def format_attribute_value(value: bytes, mode: str) -> str:
     raise ValueError(f"Unknown mode {mode}")
 
 
+def _should_print_value_hex_only(attrs: dict) -> bool:
+    key_type = attrs.get("CKA_KEY_TYPE")
+    if key_type == CKK_EC_EDWARDS:
+        return True
+    if key_type == CKK_EC:
+        ec_params = attrs.get("CKA_EC_PARAMS")
+        if ec_params == SECP256R1_OID_DER:
+            return True
+    return False
+
+
 def _decode_char_array(char_array) -> str:
     raw = bytes(char_array)
     text = raw.rstrip(b"\0 ").decode("utf-8", errors="ignore").strip()
@@ -516,6 +527,7 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                     (CKA_ID, 'CKA_ID'),
                     (CKA_VALUE, 'CKA_VALUE'),
                     (CKA_KEY_TYPE, 'CKA_KEY_TYPE'),
+                    (CKA_EC_PARAMS, 'CKA_EC_PARAMS'),
                 ]:
                     attr_template = CK_ATTRIBUTE(type=attr_type, pValue=None, ulValueLen=0)
                     rv_local = pkcs11.C_GetAttributeValue(
@@ -595,9 +607,10 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                             raw = pair['private'][1].get(name)
                         if raw is not None:
                             hex_repr = format_attribute_value(raw, 'hex')
-                            text_repr = format_attribute_value(raw, 'text')
                             print(f'      {name} (HEX): {hex_repr}')
-                            print(f'      {name} (TEXT): {text_repr}')
+                            if not (name == 'CKA_VALUE' and _should_print_value_hex_only(attrs)):
+                                text_repr = format_attribute_value(raw, 'text')
+                                print(f'      {name} (TEXT): {text_repr}')
                 if 'private' in pair:
                     _, attrs = pair['private']
                     print('    Закрытый ключ')

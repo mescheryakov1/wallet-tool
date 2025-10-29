@@ -387,6 +387,168 @@ def test_list_keys_prints_ec_key_type(monkeypatch, capsys):
     assert "bitcoin" in out
 
 
+def test_list_keys_secp256_value_hex_only(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    current_class = None
+
+    def find_objects_init(session_handle, template_ptr, count):
+        nonlocal current_class
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attr = arr[0]
+        value_ptr = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong))
+        current_class = value_ptr.contents.value
+        return 0
+
+    pkcs11_mock.C_FindObjectsInit = find_objects_init
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if current_class == structs.CKO_PUBLIC_KEY and not hasattr(find_objects, "done"):
+            obj_ptr._obj.value = 77
+            count_ptr._obj.value = 1
+            find_objects.done = True
+        else:
+            count_ptr._obj.value = 0
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+    pkcs11_mock.C_Logout = lambda session: 0
+    pkcs11_mock.C_Finalize = lambda arg: 0
+
+    value_bytes = bytes([0xAA, 0xBB, 0xCC])
+    label_bytes = b"Secp256"
+    id_bytes = b"id"
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        if not attr.pValue:
+            if attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            elif attr.type == structs.CKA_VALUE:
+                attr.ulValueLen = len(value_bytes)
+            elif attr.type == structs.CKA_LABEL:
+                attr.ulValueLen = len(label_bytes)
+            elif attr.type == structs.CKA_ID:
+                attr.ulValueLen = len(id_bytes)
+            elif attr.type == structs.CKA_EC_PARAMS:
+                attr.ulValueLen = len(commands.SECP256R1_OID_DER)
+            else:
+                attr.ulValueLen = 0
+            return 0
+
+        if attr.type == structs.CKA_KEY_TYPE:
+            key_type = ctypes.c_ulong(structs.CKK_EC)
+            ctypes.memmove(attr.pValue, ctypes.byref(key_type), ctypes.sizeof(key_type))
+        elif attr.type == structs.CKA_VALUE:
+            buf = (ctypes.c_ubyte * len(value_bytes)).from_buffer_copy(value_bytes)
+            ctypes.memmove(attr.pValue, buf, len(value_bytes))
+        elif attr.type == structs.CKA_LABEL:
+            buf = (ctypes.c_char * len(label_bytes)).from_buffer_copy(label_bytes)
+            ctypes.memmove(attr.pValue, buf, len(label_bytes))
+        elif attr.type == structs.CKA_ID:
+            buf = (ctypes.c_ubyte * len(id_bytes)).from_buffer_copy(id_bytes)
+            ctypes.memmove(attr.pValue, buf, len(id_bytes))
+        elif attr.type == structs.CKA_EC_PARAMS:
+            data = commands.SECP256R1_OID_DER
+            buf = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+            ctypes.memmove(attr.pValue, buf, len(data))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_keys(wallet_id=1, pin=None)
+
+    out = capsys.readouterr().out
+    assert "CKA_VALUE (HEX): AA BB CC" in out
+    assert "CKA_VALUE (TEXT)" not in out
+
+
+def test_list_keys_ed25519_value_hex_only(monkeypatch, capsys):
+    pkcs11_mock = SimpleNamespace()
+
+    def open_session(slot, flags, app, notify, session_ptr):
+        session_ptr._obj.value = 1
+        return 0
+
+    pkcs11_mock.C_OpenSession = open_session
+
+    current_class = None
+
+    def find_objects_init(session_handle, template_ptr, count):
+        nonlocal current_class
+        arr_type = structs.CK_ATTRIBUTE * count
+        arr = ctypes.cast(template_ptr, ctypes.POINTER(arr_type)).contents
+        attr = arr[0]
+        value_ptr = ctypes.cast(attr.pValue, ctypes.POINTER(ctypes.c_ulong))
+        current_class = value_ptr.contents.value
+        return 0
+
+    pkcs11_mock.C_FindObjectsInit = find_objects_init
+
+    def find_objects(session, obj_ptr, max_obj, count_ptr):
+        if current_class == structs.CKO_PUBLIC_KEY and not hasattr(find_objects, "done"):
+            obj_ptr._obj.value = 88
+            count_ptr._obj.value = 1
+            find_objects.done = True
+        else:
+            count_ptr._obj.value = 0
+        return 0
+
+    pkcs11_mock.C_FindObjects = find_objects
+    pkcs11_mock.C_FindObjectsFinal = lambda session: 0
+    pkcs11_mock.C_CloseSession = lambda session: 0
+    pkcs11_mock.C_Logout = lambda session: 0
+    pkcs11_mock.C_Finalize = lambda arg: 0
+
+    value_bytes = bytes([0x11, 0x22, 0x33, 0x44])
+
+    def get_attribute_value(session, obj, attr_ptr, count):
+        attr = ctypes.cast(attr_ptr, ctypes.POINTER(structs.CK_ATTRIBUTE)).contents
+        if not attr.pValue:
+            if attr.type == structs.CKA_KEY_TYPE:
+                attr.ulValueLen = ctypes.sizeof(ctypes.c_ulong)
+            elif attr.type == structs.CKA_VALUE:
+                attr.ulValueLen = len(value_bytes)
+            else:
+                attr.ulValueLen = 0
+            return 0
+
+        if attr.type == structs.CKA_KEY_TYPE:
+            key_type = ctypes.c_ulong(structs.CKK_EC_EDWARDS)
+            ctypes.memmove(attr.pValue, ctypes.byref(key_type), ctypes.sizeof(key_type))
+        elif attr.type == structs.CKA_VALUE:
+            buf = (ctypes.c_ubyte * len(value_bytes)).from_buffer_copy(value_bytes)
+            ctypes.memmove(attr.pValue, buf, len(value_bytes))
+        return 0
+
+    pkcs11_mock.C_GetAttributeValue = get_attribute_value
+
+    monkeypatch.setattr(pkcs11, "load_pkcs11_lib", lambda: pkcs11_mock)
+    monkeypatch.setattr(pkcs11, "initialize_library", lambda x: None)
+    monkeypatch.setattr(pkcs11, "finalize_library", lambda x: None)
+    monkeypatch.setattr(commands, "define_pkcs11_functions", lambda x: None)
+
+    commands.list_keys(wallet_id=1, pin=None)
+
+    out = capsys.readouterr().out
+    assert "CKA_VALUE (HEX): 11 22 33 44" in out
+    assert "CKA_VALUE (TEXT)" not in out
+
+
 def test_public_key_label_from_private(monkeypatch, capsys):
     """Public key should display label taken from the corresponding private key."""
     pkcs11_mock = SimpleNamespace()
