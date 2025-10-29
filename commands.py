@@ -787,17 +787,13 @@ def run_command_list_keys(pkcs11, wallet_id=0, pin=None):
                     print('    Закрытый ключ')
                     if attrs is not None:
                         private_names = ['CKA_LABEL', 'CKA_ID']
-                        if key_type == CKK_GOSTR3410 and 'CKA_VALUE' in attrs:
-                            private_names.append('CKA_VALUE')
-                        elif key_type in {CKK_EC, CKK_EC_EDWARDS, CKK_EC_MONTGOMERY}:
-                            for extra_name in ['CKA_EC_PARAMS', 'CKA_EC_POINT']:
-                                if extra_name in attrs:
-                                    private_names.append(extra_name)
-                        elif key_type == CKK_RSA:
-                            for extra_name in ['CKA_MODULUS', 'CKA_PUBLIC_EXPONENT', 'CKA_MODULUS_BITS']:
-                                if extra_name in attrs:
-                                    private_names.append(extra_name)
-                        elif 'CKA_VALUE' in attrs:
+                        if key_type not in {
+                            CKK_GOSTR3410,
+                            CKK_EC,
+                            CKK_EC_EDWARDS,
+                            CKK_EC_MONTGOMERY,
+                            CKK_RSA,
+                        } and 'CKA_VALUE' in attrs:
                             private_names.append('CKA_VALUE')
 
                         for name in private_names:
