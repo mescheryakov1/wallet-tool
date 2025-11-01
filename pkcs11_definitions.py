@@ -99,6 +99,39 @@ def define_pkcs11_functions(pkcs11):
     ]
     pkcs11.C_GenerateKeyPair.restype = ctypes.c_ulong
 
+    # C_DigestInit / C_Digest
+    pkcs11.C_DigestInit.argtypes = [
+        ctypes.c_ulong,                 # CK_SESSION_HANDLE
+        ctypes.POINTER(CK_MECHANISM),   # CK_MECHANISM_PTR
+    ]
+    pkcs11.C_DigestInit.restype = ctypes.c_ulong
+
+    pkcs11.C_Digest.argtypes = [
+        ctypes.c_ulong,                 # CK_SESSION_HANDLE
+        ctypes.c_void_p,                # pData
+        ctypes.c_ulong,                 # ulDataLen
+        ctypes.c_void_p,                # pDigest
+        ctypes.POINTER(ctypes.c_ulong), # pulDigestLen
+    ]
+    pkcs11.C_Digest.restype = ctypes.c_ulong
+
+    # C_SignInit / C_Sign
+    pkcs11.C_SignInit.argtypes = [
+        ctypes.c_ulong,                 # CK_SESSION_HANDLE
+        ctypes.POINTER(CK_MECHANISM),   # CK_MECHANISM_PTR
+        ctypes.c_ulong,                 # CK_OBJECT_HANDLE
+    ]
+    pkcs11.C_SignInit.restype = ctypes.c_ulong
+
+    pkcs11.C_Sign.argtypes = [
+        ctypes.c_ulong,                 # CK_SESSION_HANDLE
+        ctypes.c_void_p,                # pData
+        ctypes.c_ulong,                 # ulDataLen
+        ctypes.c_void_p,                # pSignature
+        ctypes.POINTER(ctypes.c_ulong), # pulSignatureLen
+    ]
+    pkcs11.C_Sign.restype = ctypes.c_ulong
+
     # C_DestroyObject
     pkcs11.C_DestroyObject.argtypes = [
         ctypes.c_ulong,  # CK_SESSION_HANDLE

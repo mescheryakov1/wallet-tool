@@ -10,6 +10,7 @@ from commands import (
     change_pin,
     show_wallet_info,
     import_keys,
+    sign,
 )
 
 # Для Windows: переключаем потоки в UTF-8, чтобы не падать на кириллице
@@ -80,12 +81,18 @@ def main():
     )
     parser.add_argument('--change-pin', action='store_true',
                         help='Сменить пользовательский PIN-код')
+    parser.add_argument('--sign', action='store_true',
+                        help='Подписать данные выбранным ключом')
     parser.add_argument('--new-pin', type=str, default=None,
                         help='Новый PIN-код для смены')
     parser.add_argument('--wallet-id', type=int, default=0,
                         help='Идентификатор кошелька для выполнения команды (по умолчанию 0)')
     parser.add_argument('--pin', type=str, default=None,
                         help='PIN-код для выполнения команды (не передаётся по умолчанию)')
+    parser.add_argument('--hash', dest='hash_value', type=str, default=None,
+                        help='Готовый хэш для подписи (HEX-строка)')
+    parser.add_argument('--data', type=str, default=None,
+                        help='Произвольные данные для подписи (перед подписью будут хэшированы)')
 
     args = parser.parse_args()
 
@@ -133,6 +140,14 @@ def main():
             )
     elif args.change_pin:
         change_pin(args.wallet_id, args.pin, args.new_pin)
+    elif args.sign:
+        sign(
+            args.wallet_id,
+            args.pin,
+            key_number=args.key_number,
+            hash_value=args.hash_value,
+            data=args.data,
+        )
     else:
         parser.print_help()
 
