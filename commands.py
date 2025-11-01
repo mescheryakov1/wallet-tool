@@ -39,9 +39,14 @@ from pkcs11_structs import (
     CKA_GOSTR3411_PARAMS,
     CKM_RSA_PKCS_KEY_PAIR_GEN,
     CKM_EC_KEY_PAIR_GEN,
+    CKM_ECDSA,
     CKM_EC_EDWARDS_KEY_PAIR_GEN,
     CKM_GOSTR3410_KEY_PAIR_GEN,
+    CKM_GOSTR3410,
     CKM_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN,
+    CKM_RSA_PKCS,
+    CKM_SHA256,
+    CKM_GOSTR3411_12_256,
     CK_MECHANISM,
     CKU_USER,
     CK_VENDOR_BIP32_WITH_BIP39_KEY_PAIR_GEN_PARAMS,
@@ -63,6 +68,32 @@ key_type_description = {
     CKK_EC_MONTGOMERY: "EdDSA (solana, ton и т.д.)",
     CKK_GOSTR3410: "ГОСТ 34.10-2012",
     CKK_VENDOR_BIP32: "ECDSA (bitcoin, ethereum, tron и т.д.)",
+}
+
+SIGN_KEY_CONFIG = {
+    CKK_EC: {
+        "digest_mechanism": CKM_SHA256,
+        "hash_length": 32,
+        "sign_mechanism": CKM_ECDSA,
+    },
+    CKK_VENDOR_BIP32: {
+        "digest_mechanism": CKM_SHA256,
+        "hash_length": 32,
+        "sign_mechanism": CKM_ECDSA,
+    },
+    CKK_RSA: {
+        "digest_mechanism": CKM_SHA256,
+        "hash_length": 32,
+        "sign_mechanism": CKM_RSA_PKCS,
+        "rsa_digest_info_prefix": bytes.fromhex(
+            "3031300d060960864801650304020105000420"
+        ),
+    },
+    CKK_GOSTR3410: {
+        "digest_mechanism": CKM_GOSTR3411_12_256,
+        "hash_length": 32,
+        "sign_mechanism": CKM_GOSTR3410,
+    },
 }
 
 SECP256R1_OID_DER = bytes(
@@ -257,6 +288,86 @@ def safe_get_attributes(pkcs11, session, handle, attr_types):
             result[attr_type] = raw_value
 
     return result
+
+
+def parse_hex_input(text: str) -> bytes:
+    """Преобразовать строку с шестнадцатеричными данными в байты."""
+
+    if text is None:
+        raise ValueError("значение не указано")
+
+    cleaned = text.strip()
+    if not cleaned:
+        raise ValueError("строка пуста")
+
+    tokens = cleaned.split()
+    normalized_parts = []
+
+    if len(tokens) > 1:
+        for token in tokens:
+            part = token.strip()
+            if part.lower().startswith("0x"):
+                part = part[2:]
+            if not part:
+                raise ValueError("обнаружен пустой токен")
+            if len(part) % 2 == 1:
+                part = "0" + part
+            normalized_parts.append(part)
+        normalized = "".join(normalized_parts)
+    else:
+        token = tokens[0]
+        if token.lower().startswith("0x") and token.lower().count("0x") == 1:
+            token = token[2:]
+        normalized = token.replace(" ", "")
+
+    if not normalized:
+        raise ValueError("строка пуста")
+    if len(normalized) % 2 != 0:
+        raise ValueError("нечётное количество символов")
+
+    try:
+        return bytes.fromhex(normalized)
+    except ValueError as exc:
+        raise ValueError("значение содержит недопустимые символы") from exc
+
+
+def compute_digest(pkcs11, session, mechanism_value, data: bytes):
+    """Вычислить дайджест данных с помощью функций PKCS#11."""
+
+    mechanism = CK_MECHANISM(
+        mechanism=mechanism_value, pParameter=None, ulParameterLen=0
+    )
+    rv = pkcs11.C_DigestInit(session, ctypes.byref(mechanism))
+    if rv != CKR_OK:
+        print(f'C_DigestInit вернула ошибку: 0x{rv:08X}', file=sys.stderr)
+        return None
+
+    data_len = len(data)
+    data_buffer = None
+    data_ptr = None
+    if data_len:
+        data_buffer = (ctypes.c_ubyte * data_len).from_buffer_copy(data)
+        data_ptr = ctypes.cast(data_buffer, ctypes.c_void_p)
+
+    digest_len = ctypes.c_ulong(0)
+    rv = pkcs11.C_Digest(session, data_ptr, data_len, None, ctypes.byref(digest_len))
+    if rv != CKR_OK:
+        print(f'C_Digest вернула ошибку: 0x{rv:08X}', file=sys.stderr)
+        return None
+
+    digest_buffer = (ctypes.c_ubyte * digest_len.value)()
+    rv = pkcs11.C_Digest(
+        session,
+        data_ptr,
+        data_len,
+        ctypes.cast(digest_buffer, ctypes.c_void_p),
+        ctypes.byref(digest_len),
+    )
+    if rv != CKR_OK:
+        print(f'C_Digest вернула ошибку: 0x{rv:08X}', file=sys.stderr)
+        return None
+
+    return bytes(digest_buffer[: digest_len.value])
 
 
 @pkcs11_command
@@ -1771,6 +1882,303 @@ def run_command_delete_key_pair(
                         )
                         if rv_local not in (CKR_OK, CKR_OBJECT_HANDLE_INVALID):
                             print(f'Ошибка удаления объекта: 0x{rv_local:08X}')
+    finally:
+        if logged_in:
+            pkcs11.C_Logout(session)
+        if session_opened:
+            pkcs11.C_CloseSession(session)
+        if initialized:
+            pkcs11.C_Finalize(None)
+
+
+@pkcs11_command
+def sign(
+    pkcs11,
+    wallet_id=0,
+    pin=None,
+    key_number=None,
+    hash_value=None,
+    data=None,
+):
+    """Подписать данные приватным ключом, выбранным по ``key-number``."""
+
+    run_command_sign(
+        pkcs11,
+        wallet_id=wallet_id,
+        pin=pin,
+        key_number=key_number,
+        hash_value=hash_value,
+        data=data,
+    )
+
+
+def run_command_sign(
+    pkcs11,
+    wallet_id=0,
+    pin=None,
+    key_number=None,
+    hash_value=None,
+    data=None,
+):
+    define_pkcs11_functions(pkcs11)
+
+    if key_number is None:
+        print(
+            'Для подписи необходимо указать параметр --key-number',
+            file=sys.stderr,
+        )
+        return
+
+    if not pin:
+        print('Необходимо указать PIN-код для выполнения подписи', file=sys.stderr)
+        return
+
+    if (hash_value is None and data is None) or (
+        hash_value is not None and data is not None
+    ):
+        print(
+            'Нужно указать ровно один из параметров --hash или --data',
+            file=sys.stderr,
+        )
+        return
+
+    session = ctypes.c_ulong()
+    initialized = False
+    session_opened = False
+    logged_in = False
+    try:
+        rv = pkcs11.C_Initialize(None)
+        if rv != CKR_OK:
+            print(f'C_Initialize вернула ошибку: 0x{rv:08X}')
+            return
+        initialized = True
+
+        rv = pkcs11.C_OpenSession(
+            wallet_id,
+            CKF_SERIAL_SESSION | CKF_RW_SESSION,
+            None,
+            None,
+            ctypes.byref(session),
+        )
+        if rv == CKR_TOKEN_NOT_PRESENT:
+            print('Нет подключенного кошелька, подключите кошелек')
+            return
+        if rv != CKR_OK:
+            print(f'C_OpenSession вернула ошибку: 0x{rv:08X}')
+            return
+        session_opened = True
+
+        pin_bytes = pin.encode('utf-8')
+        rv = pkcs11.C_Login(session, CKU_USER, pin_bytes, len(pin_bytes))
+        if rv != CKR_OK:
+            print(f'C_Login вернула ошибку: 0x{rv:08X}')
+            return
+        logged_in = True
+
+        def search_objects(obj_class):
+            handles = []
+            class_val = ctypes.c_ulong(obj_class)
+            template = (CK_ATTRIBUTE * 1)(
+                CK_ATTRIBUTE(
+                    type=CKA_CLASS,
+                    pValue=ctypes.cast(ctypes.pointer(class_val), ctypes.c_void_p),
+                    ulValueLen=ctypes.sizeof(class_val),
+                )
+            )
+            rv_local = pkcs11.C_FindObjectsInit(session, template, 1)
+            if rv_local != CKR_OK:
+                print(f'C_FindObjectsInit вернула ошибку: 0x{rv_local:08X}')
+                return handles
+
+            try:
+                obj = ctypes.c_ulong()
+                count = ctypes.c_ulong()
+                while True:
+                    rv_local = pkcs11.C_FindObjects(
+                        session, ctypes.byref(obj), 1, ctypes.byref(count)
+                    )
+                    if rv_local != CKR_OK:
+                        print(f'C_FindObjects вернула ошибку: 0x{rv_local:08X}')
+                        break
+                    if count.value == 0:
+                        break
+                    handles.append(obj.value)
+            finally:
+                rv_final = pkcs11.C_FindObjectsFinal(session)
+                if rv_final != CKR_OK:
+                    print(f'C_FindObjectsFinal вернула ошибку: 0x{rv_final:08X}')
+
+            return handles
+
+        def get_id(handle):
+            attr = CK_ATTRIBUTE(type=CKA_ID, pValue=None, ulValueLen=0)
+            rv_local = pkcs11.C_GetAttributeValue(
+                session, ctypes.c_ulong(handle), ctypes.byref(attr), 1
+            )
+            if rv_local != CKR_OK:
+                return None
+            if attr.ulValueLen == 0:
+                return None
+            buf = (ctypes.c_ubyte * attr.ulValueLen)()
+            attr.pValue = ctypes.cast(buf, ctypes.c_void_p)
+            rv_local = pkcs11.C_GetAttributeValue(
+                session, ctypes.c_ulong(handle), ctypes.byref(attr), 1
+            )
+            if rv_local != CKR_OK:
+                return None
+            return bytes(buf)
+
+        pairs = []
+
+        def add_handle(kind, handle):
+            key_id = get_id(handle)
+            for entry in pairs:
+                if entry['key_id'] == key_id and kind not in entry:
+                    entry[kind] = handle
+                    return
+            pairs.append({'key_id': key_id, kind: handle})
+
+        for h in search_objects(CKO_PUBLIC_KEY):
+            add_handle('public', h)
+
+        for h in search_objects(CKO_PRIVATE_KEY):
+            add_handle('private', h)
+
+        sorted_pairs = sorted(
+            enumerate(pairs), key=lambda item: ((item[1]['key_id'] or b''), item[0])
+        )
+
+        if key_number < 1 or key_number > len(sorted_pairs):
+            print('Ключ с таким номером не найден', file=sys.stderr)
+            return
+
+        pair = sorted_pairs[key_number - 1][1]
+        if 'private' not in pair:
+            print('Для выбранного номера не найден приватный ключ', file=sys.stderr)
+            return
+
+        private_handle = pair['private']
+
+        attrs = safe_get_attributes(
+            pkcs11,
+            session,
+            private_handle,
+            [CKA_KEY_TYPE],
+        )
+        key_type = None
+        if attrs and CKA_KEY_TYPE in attrs:
+            key_type = attrs[CKA_KEY_TYPE]
+        elif 'public' in pair:
+            public_attrs = safe_get_attributes(
+                pkcs11,
+                session,
+                pair['public'],
+                [CKA_KEY_TYPE],
+            )
+            if public_attrs and CKA_KEY_TYPE in public_attrs:
+                key_type = public_attrs[CKA_KEY_TYPE]
+
+        if key_type is None or key_type not in SIGN_KEY_CONFIG:
+            print(
+                'Подпись для данного типа ключа не поддерживается',
+                file=sys.stderr,
+            )
+            return
+
+        config = SIGN_KEY_CONFIG[key_type]
+        digest_bytes = None
+
+        if hash_value is not None:
+            try:
+                digest_bytes = parse_hex_input(hash_value)
+            except ValueError as exc:
+                print(f'Некорректное значение параметра --hash: {exc}', file=sys.stderr)
+                return
+            expected_len = config.get('hash_length')
+            if expected_len and len(digest_bytes) != expected_len:
+                print(
+                    f'Хэш должен содержать {expected_len} байт для данного ключа',
+                    file=sys.stderr,
+                )
+                return
+        else:
+            digest_mechanism = config.get('digest_mechanism')
+            if digest_mechanism is None:
+                print(
+                    'Невозможно автоматически вычислить хэш для данного типа ключа',
+                    file=sys.stderr,
+                )
+                return
+            data_bytes = data.encode('utf-8') if data is not None else b''
+            digest_bytes = compute_digest(pkcs11, session, digest_mechanism, data_bytes)
+            if digest_bytes is None:
+                return
+            expected_len = config.get('hash_length')
+            if expected_len and len(digest_bytes) != expected_len:
+                print(
+                    f'Полученный хэш имеет длину {len(digest_bytes)} байт, '
+                    f'ожидалось {expected_len}',
+                    file=sys.stderr,
+                )
+                return
+
+        data_to_sign = digest_bytes
+        if key_type == CKK_RSA:
+            prefix = config.get('rsa_digest_info_prefix')
+            if prefix is None:
+                print('Неизвестный формат DigestInfo для RSA', file=sys.stderr)
+                return
+            data_to_sign = prefix + digest_bytes
+
+        mechanism = CK_MECHANISM(
+            mechanism=config['sign_mechanism'],
+            pParameter=None,
+            ulParameterLen=0,
+        )
+        rv = pkcs11.C_SignInit(
+            session,
+            ctypes.byref(mechanism),
+            ctypes.c_ulong(private_handle),
+        )
+        if rv != CKR_OK:
+            print(f'C_SignInit вернула ошибку: 0x{rv:08X}')
+            return
+
+        data_len = len(data_to_sign)
+        data_buffer = (ctypes.c_ubyte * data_len).from_buffer_copy(data_to_sign)
+        data_ptr = ctypes.cast(data_buffer, ctypes.c_void_p)
+        signature_len = ctypes.c_ulong(0)
+
+        rv = pkcs11.C_Sign(
+            session,
+            data_ptr,
+            data_len,
+            None,
+            ctypes.byref(signature_len),
+        )
+        if rv != CKR_OK:
+            print(f'C_Sign вернула ошибку: 0x{rv:08X}')
+            return
+
+        signature_buffer = (ctypes.c_ubyte * signature_len.value)()
+        rv = pkcs11.C_Sign(
+            session,
+            data_ptr,
+            data_len,
+            ctypes.cast(signature_buffer, ctypes.c_void_p),
+            ctypes.byref(signature_len),
+        )
+        if rv != CKR_OK:
+            print(f'C_Sign вернула ошибку: 0x{rv:08X}')
+            return
+
+        digest_hex = digest_bytes.hex().upper()
+        signature = bytes(signature_buffer[: signature_len.value])
+        signature_hex = signature.hex().upper()
+
+        print('Хэш (HEX):', digest_hex)
+        print('Подпись (HEX):', signature_hex)
+
     finally:
         if logged_in:
             pkcs11.C_Logout(session)
